@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "com.joshiegemfinder.synchronisedblockstates.common.mixin",
+	"compatibilityLevel": "JAVA_17",
+	"mixins": [],
+	"client": [
+		"client.BlockMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

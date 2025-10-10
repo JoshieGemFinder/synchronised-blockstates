@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "synchronised-blockstates",
+	"version": "${version}",
+	"name": "Synchronised Blockstates",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/synchronised-blockstates/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.joshiegemfinder.synchronisedblockstates.fabric.SynchronisedBlockstatesFabric"
+		],
+		"client": [
+			"com.joshiegemfinder.synchronisedblockstates.fabric.client.SynchronisedBlockstatesClientFabric"
+		]
+	},
+	"mixins": [
+		"synchronised-blockstates.mixins.json",
+		"synchronised-blockstates.mixins.fabric.json"
+	],
+	"accessWidener": "synchronised-blockstates.accesswidener",
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}

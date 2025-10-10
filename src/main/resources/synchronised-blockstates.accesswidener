@@ -1,0 +1,14 @@
+accessWidener v2 named
+
+accessible  field  net/minecraft/core/IdMapper  nextId  I
+accessible  field  net/minecraft/core/IdMapper  tToId  Lit/unimi/dsi/fastutil/objects/Object2IntMap;
+mutable     field  net/minecraft/core/IdMapper  tToId  Lit/unimi/dsi/fastutil/objects/Object2IntMap;
+accessible  field  net/minecraft/core/IdMapper  idToT  Ljava/util/List;
+mutable     field  net/minecraft/core/IdMapper  idToT  Ljava/util/List;
+
+accessible  class  net/minecraft/server/network/ServerLoginPacketListenerImpl$State
+
+# extendable  method net/minecraft/core/IdMapper  byId   (I)Ljava/lang/Object;
+
+# Yikes
+# accessible  class  net/fabricmc/fabric/impl/networking/server/QueryIdFactory
