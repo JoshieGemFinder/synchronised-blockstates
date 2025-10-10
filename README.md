@@ -14,3 +14,32 @@ For example, that same image with synchronised blockstates enabled:
 Note: if the client doesn't receive blockstate info from the server, it'll fall back to using vanilla states.
 
 This mod is still a W.I.P. and there are plenty of improvements yet to be made, but it *should* function for the time being.
+
+## Configuration
+
+In lieu of a proper config at this point in time, Synchronised Blockstates has several behaviours that can be enabled or customised using JVM arguments or environment variables:
+
+* `-Dmod.synchronisedblockstates.dumpAllStates`
+  * Client-only.
+  * Accepted values: `true`, `1`, `yes`, `on`.
+  * On startup, encodes all blockstates (using the same format as if it were sending a single, unchunked, state registry packet) and writes it to `<minecraft run directory>/synchronized_blockstates/vanillablockstates.dat` (note: not necessarily only vanilla blockstates, will also include modded blockstates if there are any modded blocks).
+
+* `-Dmod.synchronisedblockstates.ouputMissingStates`
+  * Client-only.
+  * Accepted values: `true`, `1`, `yes`, `on`.
+  * When the client recieves a packet and remaps its local registry, outputs any mismatches between the client and server registries to `<minecraft run directory>/synchronized_blockstates/missing-states-<current time>.dat`
+
+* `-Dmod.synchronisedblockstates.propertyChunkingThreshold`
+  * Logical Server only.
+  * Accepted values: any integer, default `1024`.
+  * Max limit on properties before the server starts chunking data before sending it to the client. Additionally, the maximum number of properties that can be sent in a single property chunk.
+
+* `-Dmod.synchronisedblockstates.blockChunkingThreshold`
+  * Logical Server only.
+  * Accepted values: any integer, default `4096`.
+  * Max limit on blocks before the server starts chunking data before sending it to the client. Additionally, the maximum number of blocks there can be sent in a single blockstate chunk.
+
+* `-Dmod.synchronisedblockstates.stateChunkingThreshold`
+  * Logical Server only.
+  * Accepted values: any integer, default `32768`.
+  * Max limit on blockstates before the server starts chunking data before sending it to the client.
