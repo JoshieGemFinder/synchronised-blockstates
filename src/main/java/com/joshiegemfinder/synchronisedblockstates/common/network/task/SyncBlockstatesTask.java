@@ -22,7 +22,7 @@ import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry
 import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresentative;
 import com.joshiegemfinder.synchronisedblockstates.common.util.RegistryBlockInfoWrapper;
 
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.login.ClientboundCustomQueryPacket;
@@ -43,7 +43,7 @@ public class SyncBlockstatesTask implements Task {
 	}
 	
 	public <T> ClientboundCustomQueryPacket createPacket(ResourceLocation type, T packet, BiConsumer<FriendlyByteBuf, T> encoder) {
-		FriendlyByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
 		encoder.accept(buf, packet);
 		return new ClientboundCustomQueryPacket(this.queryIdGenerator.nextQueryId(), type, buf);
 	}

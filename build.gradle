@@ -1,7 +1,11 @@
 plugins {
-	id 'fabric-loom' version "${loom_version}"
+	//id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	// for debugging
+	id 'com.dorongold.task-tree' version "2.1.1"
 }
+
+apply plugin: 'fabric-loom' 
 
 version = project.mod_version
 group = project.maven_group
@@ -12,6 +16,13 @@ base {
 
 loom {
 	accessWidenerPath = file("src/main/resources/synchronised-blockstates.accesswidener")
+	/*
+	mixin {
+		add(sourceSets.main, 'synchronised-blockstates.refmap.json', pattern -> {
+			pattern.includes = ['synchronised-blockstates.mixins.json']
+		})
+	}
+	*/
 }
 
 repositories {
@@ -26,19 +37,10 @@ dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings loom.officialMojangMappings()
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	
 }
 
 processResources {
 	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
-	}
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -62,6 +64,8 @@ jar {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
 }
+
+apply from: 'fabric.gradle'
 
 // configure the maven publication
 publishing {

@@ -1,0 +1,193 @@
+
+def extendsFrom = { configurationName1, configurationName2 ->
+	configurations.named(configurationName1) {
+		extendsFrom configurations.getByName(configurationName2)
+	}
+}
+
+sourceSets {
+	fabric {
+		// really, we want compileClasspath/runtimeClasspath += sourceSets.main.output and no srcDirs sourceSets.main.XXXX.srcDirs, but loom's mixin handler doesn't like it
+		compileClasspath += sourceSets.main.compileClasspath
+		runtimeClasspath += sourceSets.main.runtimeClasspath
+		annotationProcessorPath += sourceSets.main.annotationProcessorPath
+		java {
+			srcDirs sourceSets.main.java.srcDirs
+			srcDir "src/fabric/java"
+		}
+		resources {
+			srcDirs sourceSets.main.resources.srcDirs
+			srcDir "src/fabric/resources"
+		}
+		extendsFrom(compileClasspathConfigurationName,    sourceSets.main.compileClasspathConfigurationName)
+		extendsFrom(runtimeClasspathConfigurationName,    sourceSets.main.runtimeClasspathConfigurationName)
+		extendsFrom(annotationProcessorConfigurationName, sourceSets.main.annotationProcessorConfigurationName)
+	}
+}
+
+loom {
+	mixin {
+		add(sourceSets.fabric, 'synchronised-blockstates.refmap.json', pattern -> {
+			pattern.includes = ['synchronised-blockstates.fabric.mixins.json', 'synchronised-blockstates.mixins.json']
+		})
+	}
+	
+	createRemapConfigurations(sourceSets.fabric)
+}
+
+repositories {
+	// Add repositories to retrieve artifacts from in here.
+	// You should only use this when depending on other mods because
+	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
+	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
+	// for more information about repositories.
+}
+
+dependencies {
+	modFabricImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API. This is technically optional, but you probably want it anyway.
+	modFabricImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+def copyPropertiesFrom = { copyFrom, copyTo, properties -> 
+	properties.each { property -> 
+		if(copyFrom[property] instanceof Property) {
+			if(copyFrom[property].isPresent()) {
+				copyTo[property].set(copyFrom[property].get())
+			} else {
+				copyTo[property].set(copyFrom[property])
+			}
+		} else {
+			copyTo[property] = copyFrom[property]
+		}
+	}
+}
+
+compileFabricJava {
+	shouldRunAfter compileJava
+	
+	copyPropertiesFrom(compileJava, compileFabricJava, ['javaCompiler', 'sourceCompatibility', 'targetCompatibility'])
+	copyPropertiesFrom(compileJava.options, compileFabricJava.options, ['bootstrapClasspath', 'compilerArgs', 'debug', 'encoding', 'extensionDirs', 'failOnError', 'fork', 'incremental', 'listFiles', 'release', 'verbose', 'warnings'])
+	options.debugOptions.debugLevel = compileJava.options.debugOptions.debugLevel
+}
+
+processFabricResources {
+	copyPropertiesFrom(processResources, processFabricResources, ['caseSensitive', 'dirPermissions', 'duplicatesStrategy', 'filePermissions', 'includeEmptyDirs'])
+
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": inputs.properties.version
+	}
+}
+
+fabricClasses {
+	shouldRunAfter classes
+}
+
+tasks.register('fabricJar', Jar) { fabricJar ->
+	dependsOn fabricClasses
+	shouldRunAfter jar
+	// // the 'with' will copy most of these already, but it's better to be safe than sorry
+	copyPropertiesFrom(jar, fabricJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+	archiveVersion = archiveVersion.get() + "+fabric"
+	from sourceSets.fabric.output
+	// Apparently this absolutely destroys loom's mixin preprocessor
+	// // Use 'with' to make sure includes/excludes from jar apply here too
+	// with jar
+}
+
+tasks.register('fabricSourcesJar', Jar) { fabricSourcesJar ->
+	shouldRunAfter jar
+	shouldRunAfter sourcesJar
+	// // the 'with' will copy most of these already, but it's better to be safe than sorry
+	copyPropertiesFrom(sourcesJar, fabricSourcesJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+	archiveVersion = archiveVersion.get() + "+fabric"
+	from sourceSets.fabric.allSource
+	// Apparently this absolutely destroys loom's mixin preprocessor
+	// // Use 'with' to make sure includes/excludes from sourcesJar apply here too
+	// with sourcesJar
+}
+
+tasks.register('remapFabricJar', UsableRemapJarTask) { remapFabricJar ->
+	dependsOn fabricJar
+	shouldRunAfter remapJar
+	description = "Remaps the built fabric project jar to intermediary mappings."
+	group = "fabric"
+	
+	copyPropertiesFrom(remapJar, remapFabricJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+	archiveVersion = archiveVersion.get() + "+fabric"
+	
+	copyPropertiesFrom(remapJar, remapFabricJar, ['sourceNamespace', 'targetNamespace', 'jarType', 'includesClientOnlyClasses'])
+	inputFile = fabricJar.archiveFile.get()
+	classpath.from configurations.compileClasspath
+	classpath.from configurations.fabricCompileClasspath
+	
+	project.artifacts.add(JavaPlugin.API_ELEMENTS_CONFIGURATION_NAME, remapFabricJar);
+	project.artifacts.add(JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME, remapFabricJar);
+	
+	copyPropertiesFrom(remapJar, remapFabricJar, ['nestedJars', 'addNestedDependencies', 'optimizeFabricModJson'])
+}
+
+tasks.named('check').configure {
+	shouldRunAfter tasks.getByName('remapFabricJar')
+}
+
+tasks.named('assemble').configure {
+	dependsOn remapFabricJar
+}
+
+import net.fabricmc.loom.task.RemapSourcesJarTask;
+
+tasks.register('remapFabricSourcesJar', RemapSourcesJarTask) { remapFabricSourcesJar ->
+	dependsOn fabricSourcesJar
+	shouldRunAfter remapFabricJar
+	shouldRunAfter remapSourcesJar
+	description = "Remaps the fabric sources jar to intermediary mappings."
+	group = "fabric"
+	
+	copyPropertiesFrom(remapSourcesJar, remapFabricSourcesJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+	archiveVersion = archiveVersion.get() + "+fabric"
+	// with remapSourcesJar
+	
+	copyPropertiesFrom(remapSourcesJar, remapFabricSourcesJar, ['sourceNamespace', 'targetNamespace', 'jarType', 'includesClientOnlyClasses'])
+}
+
+assemble.dependsOn remapFabricSourcesJar
+
+// Loom does some annoying stuff with this after project evaluation, so we have to reconfigure source jar tasks here
+project.afterEvaluate {
+	fabricSourcesJar {
+		// // the 'with' will copy most of these already, but it's better to be safe than sorry
+		copyPropertiesFrom(sourcesJar, fabricSourcesJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+		archiveVersion = archiveVersion.get() + "+fabric"
+		duplicatesStrategy = 'EXCLUDE'
+		from sourceSets.fabric.allSource
+		// Apparently this absolutely destroys loom's mixin preprocessor
+		// // Use 'with' to make sure includes/excludes from sourcesJar apply here too
+		// // with sourcesJar
+	}
+	
+	remapFabricSourcesJar {
+		// // the 'with' will copy most of these already, but it's better to be safe than sorry
+		copyPropertiesFrom(remapSourcesJar, remapFabricSourcesJar, ['archiveAppendix', 'archiveBaseName', 'archiveClassifier', 'archiveExtension', 'archiveVersion', 'caseSensitive', 'destinationDirectory', 'dirPermissions', 'duplicatesStrategy', 'entryCompression', 'filePermissions', 'includeEmptyDirs', 'manifest', 'metadataCharset', 'preserveFileTimestamps', 'reproducibleFileOrder', 'zip64'])
+		archiveVersion = archiveVersion.get() + "+fabric"
+		// Apparently this absolutely destroys loom's mixin preprocessor
+		// // Use 'with' to make sure includes/excludes from remapSourcesJar apply here too
+		// // with remapSourcesJar
+		
+		copyPropertiesFrom(remapSourcesJar, remapFabricSourcesJar, ['sourceNamespace', 'targetNamespace', 'jarType', 'includesClientOnlyClasses'])
+		inputFile = fabricSourcesJar.archiveFile.get()
+	}
+	
+	
+	if (configurations.names.contains(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME)) {
+		// The dev sources artifact would have already been removed by the loom plugin
+
+		// Add the remapped sources artifact
+		artifacts.add(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME, remapFabricSourcesJar.archiveFile.get(), artifact -> {
+			artifact.setClassifier("sources");
+		});
+	}
+}

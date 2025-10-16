@@ -24,7 +24,7 @@
 	},
 	"mixins": [
 		"synchronised-blockstates.mixins.json",
-		"synchronised-blockstates.mixins.fabric.json"
+		"synchronised-blockstates.fabric.mixins.json"
 	],
 	"accessWidener": "synchronised-blockstates.accesswidener",
 	"depends": {
