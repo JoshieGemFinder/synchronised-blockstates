@@ -11,7 +11,7 @@ import net.minecraft.Util;
 
 public interface ClassMappingService {
 	
-	public static final ClassMappingService INSTANCE = Util.make(() -> {
+	private static ClassMappingService getInstance() {
 		final ServiceLoader<ClassMappingService> loader = ServiceLoader.load(ClassMappingService.class);
 
 		List<ClassMappingService> list = new ArrayList<>();
@@ -27,6 +27,12 @@ public interface ClassMappingService {
 		
 		SynchronisedBlockstates.LOGGER.warn("Could not find a class remapper!");
 		return new Empty();
+	}
+	
+	public static final ClassMappingService INSTANCE = Util.make(() -> {
+		ClassMappingService instance = getInstance();
+		instance.initializeMappings();
+		return instance;
 	});
 
 	/**
