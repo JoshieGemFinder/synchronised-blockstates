@@ -6,6 +6,8 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.Function;
 
+import com.joshiegemfinder.synchronisedblockstates.common.service.ClassMappingService;
+
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
@@ -61,7 +63,10 @@ public record PropertyRepresentative(String name, String propertyClass, String[]
 	
 	public static void encode(FriendlyByteBuf buf, final PropertyRepresentative property) {
 		buf.writeUtf(property.name);
-		buf.writeUtf(property.propertyClass);
+		String propertyClass = property.propertyClass;
+//		String networkClass = propertyClass;
+		String networkClass = ClassMappingService.INSTANCE.convertRuntimeToNetworkMappings(propertyClass);
+		buf.writeUtf(networkClass);
 		final String[] allowedValues = property.allowedValues;
 		final int allowedValueCount = allowedValues.length;
 		buf.writeVarInt(allowedValueCount);
@@ -72,7 +77,9 @@ public record PropertyRepresentative(String name, String propertyClass, String[]
 
 	public static PropertyRepresentative decode(FriendlyByteBuf buf) {
 		String name = buf.readUtf();	
-		String propertyClass = buf.readUtf();
+		String networkClass = buf.readUtf();
+//		String propertyClass = networkClass;
+		String propertyClass = ClassMappingService.INSTANCE.convertNetworkToRuntimeMappings(networkClass);
 		final int allowedValueCount = buf.readVarInt();
 		final String[] allowedValues = new String[allowedValueCount];
 		for(int i = 0; i < allowedValueCount; ++i) {
