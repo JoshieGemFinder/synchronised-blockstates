@@ -17,7 +17,7 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 public class FabricClassMappingService implements ClassMappingService {
 
 	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-	private boolean initialized = false;
+	private volatile boolean initialized = false;
 	private final Object2ObjectOpenHashMap<String, String> runtimeToNetworkMappings = new Object2ObjectOpenHashMap<>(8192);
 	private final Object2ObjectOpenHashMap<String, String> networkToRuntimeMappings = new Object2ObjectOpenHashMap<>(8192);
 	
@@ -37,6 +37,7 @@ public class FabricClassMappingService implements ClassMappingService {
 		final String networkNamespace = mappingProperties.getProperty("networkNamespace");
 		
 		if(runtimeNamespace == null || networkNamespace == null) {
+			SynchronisedBlockstates.LOGGER.warn("Fabric class remapper: null runtimeNamespace/networkNamespace is not valid");
 			return false;
 		}
 		
@@ -52,6 +53,8 @@ public class FabricClassMappingService implements ClassMappingService {
 	@Override
 	public void initializeMappings() {
 		Lock writeLock = this.lock.writeLock();
+		writeLock.lock();
+		SynchronisedBlockstates.LOGGER.info("Initializing fabric class remapper!");
 		try {
 			this.initialized = false;
 			this.runtimeToNetworkMappings.clear();
@@ -59,8 +62,10 @@ public class FabricClassMappingService implements ClassMappingService {
 			
 			try {
 				this.initialized = this.loadMappings();
+
+				SynchronisedBlockstates.LOGGER.info("Fabric class mapper initialization successful: {}", this.initialized);
 			} catch(IOException e) {
-				SynchronisedBlockstates.LOGGER.warn("Failed to load fabric mapper!");
+				SynchronisedBlockstates.LOGGER.warn("Failed to load fabric class mapper!", e);
 			}
 		} finally {
 			writeLock.unlock();
@@ -70,6 +75,7 @@ public class FabricClassMappingService implements ClassMappingService {
 	@Override
 	public String convertRuntimeToNetworkMappings(String className) {
 		Lock readLock = this.lock.readLock();
+		readLock.lock();
 		try {
 			if(!this.initialized) {
 				return className;
@@ -83,6 +89,7 @@ public class FabricClassMappingService implements ClassMappingService {
 	@Override
 	public String convertNetworkToRuntimeMappings(String className) {
 		Lock readLock = this.lock.readLock();
+		readLock.lock();
 		try {
 			if(!this.initialized) {
 				return className;
