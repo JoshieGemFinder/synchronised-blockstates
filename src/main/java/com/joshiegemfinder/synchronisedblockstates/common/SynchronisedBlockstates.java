@@ -8,7 +8,7 @@ public class SynchronisedBlockstates {
 
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	public static final int NETWORK_VERSION = 2;
+	public static final int NETWORK_VERSION = 3;
 
 	public static void onInitialize() {
 		

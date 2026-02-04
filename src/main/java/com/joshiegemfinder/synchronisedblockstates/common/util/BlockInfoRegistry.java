@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedPropertyRegistry;
+
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
@@ -27,6 +29,8 @@ public final class BlockInfoRegistry {
 
 	protected final PropertyRepresentative[] propertyRegistry;
 	protected final RegistryBlockInfoWrapper.Impl[] blockRegistry;
+	
+	protected NetworkedPropertyRegistry networkedPropertyRegistry = null;
 	
 	public BlockInfoRegistry(BlockInfoWrapper[] blockInfoArray) {
 		final int blockCount = blockInfoArray.length;
@@ -67,6 +71,13 @@ public final class BlockInfoRegistry {
 		}
 	}
 
+	public NetworkedPropertyRegistry getNetworkedPropertyRegistry() {
+		if(this.networkedPropertyRegistry == null) {
+			this.networkedPropertyRegistry = NetworkedPropertyRegistry.create(this.propertyRegistry);
+		}
+		return this.networkedPropertyRegistry;
+	}
+	
 //	public int getPropertyCount() {
 //		return this.propertyRegistry.length;
 //	}
@@ -105,16 +116,19 @@ public final class BlockInfoRegistry {
 	}
 	
 	public static void encode(FriendlyByteBuf buf, final BlockInfoRegistry registry) {
-		// Write properties
-		final PropertyRepresentative[] properties = registry.getProperties();
-		final int propertyCount = properties.length;
+//		// Write properties
+//		final PropertyRepresentative[] properties = registry.getProperties();
+//		final int propertyCount = properties.length;
+//		
+//		// Write property count
+//		buf.writeVarInt(propertyCount);
+//		// Write each individual property
+//		for(int i = 0; i < propertyCount; ++i) {
+//			PropertyRepresentative.encode(buf, properties[i]);
+//		}
 		
-		// Write property count
-		buf.writeVarInt(propertyCount);
-		// Write each individual property
-		for(int i = 0; i < propertyCount; ++i) {
-			PropertyRepresentative.encode(buf, properties[i]);
-		}
+		// Write properties
+		NetworkedPropertyRegistry.encode(buf, registry.getNetworkedPropertyRegistry());
 		
 		// Write blocks
 		final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
@@ -132,20 +146,25 @@ public final class BlockInfoRegistry {
 	}
 	
 	private BlockInfoRegistry(FriendlyByteBuf buf) {
-		// Read the property count
-		final int propertyCount = buf.readVarInt();
-
+//		// Read the property count
+//		final int propertyCount = buf.readVarInt();
+//
+//		// Read the properties
+//		final PropertyRepresentative[] propertyRegistry = this.propertyRegistry = new PropertyRepresentative[propertyCount];
+//		for(int i = 0; i < propertyCount; ++i) {
+//			propertyRegistry[i] = PropertyRepresentative.decode(buf);
+//		}
+		
 		// Read the properties
-		final PropertyRepresentative[] propertyRegistry = this.propertyRegistry = new PropertyRepresentative[propertyCount];
-		for(int i = 0; i < propertyCount; ++i) {
-			propertyRegistry[i] = PropertyRepresentative.decode(buf);
-		}
+		NetworkedPropertyRegistry networkedProperties = NetworkedPropertyRegistry.decode(buf);
+		this.networkedPropertyRegistry = networkedProperties;
+		this.propertyRegistry = networkedProperties.compileProperties();
 		
 		// Read blocks
 		final int blockCount = buf.readVarInt();
 		final RegistryBlockInfoWrapper.Impl[] blockRegistry = this.blockRegistry = new RegistryBlockInfoWrapper.Impl[blockCount];
 		for(int i = 0; i < blockCount; ++i) {
-			blockRegistry[i] = RegistryBlockInfoWrapper.decodeRegistry(buf, propertyRegistry);
+			blockRegistry[i] = RegistryBlockInfoWrapper.decodeRegistry(buf, this.propertyRegistry);
 		}
 	}
 	
