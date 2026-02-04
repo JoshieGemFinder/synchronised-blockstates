@@ -1,5 +1,6 @@
 package com.joshiegemfinder.synchronisedblockstates.fabric;
 
+import com.joshiegemfinder.synchronisedblockstates.common.SynchronisedBlockstates;
 import com.joshiegemfinder.synchronisedblockstates.common.client.handler.ChunkedRegistryHandler;
 import com.joshiegemfinder.synchronisedblockstates.common.client.handler.RegistryRemapHandler;
 import com.joshiegemfinder.synchronisedblockstates.fabric.mixin.client.ClientHandshakePacketListenerImplConnectionAccessor;
@@ -12,6 +13,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 public class SynchronisedBlockstatesFabric implements ModInitializer {
 	@Override
 	public void onInitialize() {
+		SynchronisedBlockstates.onInitialize();
+		
 		SynchronisedBlockstatesNetworkFabric.registerPackets();
 		SynchronisedBlockstatesNetworkFabric.registerTasks();
 		
