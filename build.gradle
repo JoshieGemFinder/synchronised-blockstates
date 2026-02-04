@@ -3,6 +3,7 @@ plugins {
 	id 'maven-publish'
 	// for debugging
 	id 'com.dorongold.task-tree' version "2.1.1"
+	id 'groovy'
 }
 
 apply plugin: 'fabric-loom' 

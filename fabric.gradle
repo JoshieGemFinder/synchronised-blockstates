@@ -72,14 +72,68 @@ compileFabricJava {
 	options.debugOptions.debugLevel = compileJava.options.debugOptions.debugLevel
 }
 
+tasks.register('extractFabricMappings') {
+	group = "build"
+	
+	def configurationName = 'mappingsFinal'
+	def mappingPrefix = 'fabric'
+	def networkNamespace = project.network_namespace
+	def runtimeNamespace = project.fabric_runtime_namespace
+	
+	inputs.property 'mappingPrefix', mappingPrefix
+	inputs.property 'configurationName', configurationName
+	inputs.property 'networkNamespace', networkNamespace
+	inputs.property 'runtimeNamespace', runtimeNamespace
+	
+	outputs.dir(temporaryDir)
+	
+	doLast {
+		// Get name of mappings based on prefix
+		// No prefix: mappings.tiny, mappings.properties
+		// With prefix: <prefix>-mappings.tiny, <prefix>-mappings.properties
+		//         e.g. fabric-mappings.tiny, fabric-mappings.properties
+		def mappingBaseName = "mappings"
+		if(mappingPrefix != '') {
+			mappingBaseName = "${mappingPrefix}-mappings"
+		}
+		
+		def mappingFiles = files(configurations.getByName(configurationName).files)
+		
+		// Should only ever be a single mapping file here
+		def mappingJar = mappingFiles.filter { it.name.endsWith('.jar') }.getSingleFile()
+		// println "Mapping jar: ${mappingJar}"
+		
+		// File to read mappings from
+		def mappingInputFile = zipTree(mappingJar).matching { include 'mappings/mappings.tiny' }.getSingleFile();
+		
+		// File to write mappings to
+		def mappingOutputFile = file(temporaryDir.toPath().resolve("${mappingBaseName}.tiny"))
+		
+		// Minifier for mappings
+		def mappingMinifier = new TinyV2MappingMinifier(runtimeNamespace, networkNamespace);
+		
+		mappingMinifier.minifyFromTo(mappingInputFile, mappingOutputFile)
+		
+		def properties = file(temporaryDir.toPath().resolve("${mappingBaseName}.properties"))
+		properties.write("networkNamespace=${networkNamespace}\n")
+		properties.append("runtimeNamespace=${runtimeNamespace}\n")
+	}
+}
+
 processFabricResources {
 	copyPropertiesFrom(processResources, processFabricResources, ['caseSensitive', 'dirPermissions', 'duplicatesStrategy', 'filePermissions', 'includeEmptyDirs'])
 
-	inputs.property "version", project.version
+	inputs.property 'version', project.version
 
 	filesMatching("fabric.mod.json") {
 		expand "version": inputs.properties.version
 	}
+	
+	dependsOn 'extractFabricMappings'
+	
+	into("mappings", {
+		from tasks.extractFabricMappings.outputs
+	})
 }
 
 fabricClasses {
