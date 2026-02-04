@@ -72,8 +72,13 @@ public class MappingCollector {
 				String lineType = lineContents[0];
 				// We only care about classes
 				if(lineType.equals("c")) {
-					String runtimeClassName = lineContents[runtimeNamespaceIndex];
-					String networkClassName = lineContents[networkNamespaceIndex];
+					String runtimeClassDescriptor = lineContents[runtimeNamespaceIndex];
+					String networkClassDescriptor = lineContents[networkNamespaceIndex];
+
+					// Convert (e.g. net/minecraft/Minecraft to net.minecraft.Minecraft)
+					// TODO Check for a better way to do this conversion
+					String runtimeClassName = runtimeClassDescriptor.replace('/', '.');
+					String networkClassName = networkClassDescriptor.replace('/', '.');
 					
 					runtimeToNetworkMappingConsumer.accept(runtimeClassName, networkClassName);
 				}
