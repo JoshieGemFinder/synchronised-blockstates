@@ -55,7 +55,7 @@ public record NetworkedPropertyRegistry(
 		
 		final ToIntFunction<String> getOrAddStringTableValue = (String string) -> stringTableInterner.computeIfAbsent(string, (String key) -> {
 			// Get the index of the value
-			final int index = remappedPropertyClassesList.size();
+			final int index = stringTableList.size();
 			// Add the value to the ordered list
 			stringTableList.add(key);
 			// Return index in property classes list
@@ -206,7 +206,7 @@ public record NetworkedPropertyRegistry(
 		
 		// Decode string table
 		final int stringTableLength = buf.readVarInt();
-		final String[] stringTable = new String[remappedPropertyClassesLength];
+		final String[] stringTable = new String[stringTableLength];
 		for(int i = 0; i < stringTableLength; ++i) {
 			stringTable[i] = buf.readUtf();
 		}
