@@ -92,6 +92,14 @@ public record NetworkedPropertyRegistry(
 			);
 	}
 	
+	public final int getClassTableSize() {
+		return this.remappedPropertyClasses.length;
+	}
+
+	public final int getStringTableSize() {
+		return this.stringTable.length;
+	}
+	
 	public final String[] getRemappedPropertyClasses() {
 		return this.remappedPropertyClasses;
 	}
@@ -125,6 +133,14 @@ public record NetworkedPropertyRegistry(
 	}
 	
 	public final PropertyRepresentative[] compileProperties() {
+		PropertyRepresentative[] compiledProperties = new PropertyRepresentative[this.properties.length];
+		
+		this.compilePropertiesInto(compiledProperties);
+		
+		return compiledProperties;
+	}
+	
+	public final void compilePropertiesInto(PropertyRepresentative[] compiledProperties) {
 		// Get the property class table, already remapped to runtime mappings
 		final String[] runtimePropertyClasses = this.computeRuntimePropertyClasses();
 		
@@ -133,8 +149,6 @@ public record NetworkedPropertyRegistry(
 		final NetworkedProperty[] networkedProperties = this.properties;
 		
 		final int propertyCount = networkedProperties.length;
-		
-		PropertyRepresentative[] compiledProperties = new PropertyRepresentative[propertyCount];
 		
 		for(int i = 0; i < propertyCount; ++i) {
 			NetworkedProperty networkedProperty = networkedProperties[i];
@@ -153,8 +167,6 @@ public record NetworkedPropertyRegistry(
 			
 			compiledProperties[i] = PropertyRepresentative.create(name, runtimePropertyClass, allowedValues);
 		}
-		
-		return compiledProperties;
 	}
 	
 	public static void encode(FriendlyByteBuf buf, final NetworkedPropertyRegistry propertyRegistry) {

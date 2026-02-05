@@ -7,8 +7,10 @@ import com.joshiegemfinder.synchronisedblockstates.common.client.handler.Chunked
 import com.joshiegemfinder.synchronisedblockstates.common.client.handler.RegistryRemapHandler;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryBlockInfoPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryCompletePacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyClassTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStartPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStringTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.LoginTaskProbePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.UnchunkedBlockRegistryPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.ClientAckResponse;
@@ -64,17 +66,40 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunking start packet from server [UUID = {}]...", packet.uuid());
 			
-			boolean decodeYes = ChunkedRegistryHandler.startDecoding(packet.uuid(), packet.totalPropertyCount(), packet.totalBlockCount());
+			boolean decodeYes = ChunkedRegistryHandler.startDecoding(packet.uuid(), packet.classTableSize(), packet.stringTableSize(), packet.totalPropertyCount(), packet.totalBlockCount());
 			
 			FriendlyByteBuf responseBuf = PacketByteBufs.create();
 			responseBuf.writeBoolean(decodeYes);
 			return CompletableFuture.completedFuture(responseBuf);
 		});
 
+		// Decode property class string table
+		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, (client, handler, buf, listenerAdder) -> {
+			ChunkedBlockRegistryPropertyClassTablePacket packet = ChunkedBlockRegistryPropertyClassTablePacket.decode(buf);
+
+			SynchronisedBlockstates.LOGGER.info("Recieved chunked class table packet from server [UUID = {}]...", packet.uuid());
+			
+			ChunkedRegistryHandler.acceptPropertyClasses(packet.uuid(), packet.tableOffset(), packet.tableChunk());
+			
+			return CompletableFuture.completedFuture(PacketByteBufs.create());
+		});
+
+		// Decode property name/value string table
+		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryStringTablePacket.TYPE, (client, handler, buf, listenerAdder) -> {
+			ChunkedBlockRegistryStringTablePacket packet = ChunkedBlockRegistryStringTablePacket.decode(buf);
+
+			SynchronisedBlockstates.LOGGER.info("Recieved chunked string table packet from server [UUID = {}]...", packet.uuid());
+			
+			ChunkedRegistryHandler.acceptPropertyStringTable(packet.uuid(), packet.tableOffset(), packet.tableChunk());
+			
+			return CompletableFuture.completedFuture(PacketByteBufs.create());
+		});
+
+		// Decode property instance table
 		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyPacket.TYPE, (client, handler, buf, listenerAdder) -> {
 			ChunkedBlockRegistryPropertyPacket packet = ChunkedBlockRegistryPropertyPacket.decode(buf);
 
-			SynchronisedBlockstates.LOGGER.info("Recieved chunked property representative packet from server [UUID = {}]...", packet.uuid());
+			SynchronisedBlockstates.LOGGER.info("Recieved chunked property table packet from server [UUID = {}]...", packet.uuid());
 			
 			ChunkedRegistryHandler.acceptProperties(packet.uuid(), packet.propertyOffset(), packet.propertyRepresentatives());
 			

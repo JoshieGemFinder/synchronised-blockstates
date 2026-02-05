@@ -3,12 +3,12 @@ package com.joshiegemfinder.synchronisedblockstates.common.network.packet;
 import java.util.UUID;
 
 import com.joshiegemfinder.synchronisedblockstates.common.SynchronisedBlockstates;
-import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresentative;
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedProperty;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
-public record ChunkedBlockRegistryPropertyPacket(UUID uuid, int propertyOffset, PropertyRepresentative[] propertyRepresentatives) {
+public record ChunkedBlockRegistryPropertyPacket(UUID uuid, int propertyOffset, NetworkedProperty[] propertyRepresentatives) {
 
 	public static final ResourceLocation TYPE = new ResourceLocation(SynchronisedBlockstates.MOD_ID, "chunked_block_sync_properties");
 
@@ -16,11 +16,11 @@ public record ChunkedBlockRegistryPropertyPacket(UUID uuid, int propertyOffset, 
 		buf.writeUUID(packet.uuid());
 		buf.writeInt(packet.propertyOffset());
 		
-		final PropertyRepresentative[] propertyRepresentatives = packet.propertyRepresentatives();
+		final NetworkedProperty[] propertyRepresentatives = packet.propertyRepresentatives();
 		
 		buf.writeVarInt(propertyRepresentatives.length);
 		for(int i = 0; i < propertyRepresentatives.length; ++i) {
-			PropertyRepresentative.encode(buf, propertyRepresentatives[i]);
+			NetworkedProperty.encode(buf, propertyRepresentatives[i]);
 		}
 	}
 	
@@ -29,9 +29,9 @@ public record ChunkedBlockRegistryPropertyPacket(UUID uuid, int propertyOffset, 
 		int propertyOffset = buf.readInt();
 		
 		final int propertyCount = buf.readVarInt();
-		final PropertyRepresentative[] propertyRepresentatives = new PropertyRepresentative[propertyCount];
+		final NetworkedProperty[] propertyRepresentatives = new NetworkedProperty[propertyCount];
 		for(int i = 0; i < propertyCount; ++i) {
-			propertyRepresentatives[i] = PropertyRepresentative.decode(buf);
+			propertyRepresentatives[i] = NetworkedProperty.decode(buf);
 		}
 		
 		return new ChunkedBlockRegistryPropertyPacket(uuid, propertyOffset, propertyRepresentatives);

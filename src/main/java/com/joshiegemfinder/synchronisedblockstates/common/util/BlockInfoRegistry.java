@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedProperty;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedPropertyRegistry;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -168,28 +169,50 @@ public final class BlockInfoRegistry {
 		}
 	}
 	
-	public static ChunkedRegistryDecoder startChunkDecoding(UUID uuid, int propertyCount, int blockCount) {
-		return new ChunkedRegistryDecoder(uuid, propertyCount, blockCount);
+	public static ChunkedRegistryDecoder startChunkDecoding(UUID uuid, int classTableSize, int stringTableSize, int propertyCount, int blockCount) {
+		return new ChunkedRegistryDecoder(uuid, classTableSize, stringTableSize, propertyCount, blockCount);
 	}
 	
 	public static final class ChunkedRegistryDecoder {
 		public final UUID uuid;
+		protected final String[] propertyClassTable;
+		protected final String[] propertyStringTable;
+		protected final NetworkedProperty[] propertyTable;
 		protected final PropertyRepresentative[] propertyRegistry;
 		protected final RegistryBlockInfoWrapper.Impl[] blockRegistry;
 		private boolean finished = false;
 		
-		private ChunkedRegistryDecoder(UUID uuid, int propertyCount, int blockCount) {
+		private ChunkedRegistryDecoder(UUID uuid, int classTableSize, int stringTableSize, int propertyCount, int blockCount) {
 			this.uuid = uuid;
+			this.propertyClassTable = new String[classTableSize];
+			this.propertyStringTable = new String[stringTableSize];
+			this.propertyTable = new NetworkedProperty[propertyCount];
 			this.propertyRegistry = new PropertyRepresentative[propertyCount];
 			this.blockRegistry = new RegistryBlockInfoWrapper.Impl[blockCount];
 		}
 		
-		public void acceptProperties(int propertyOffset, PropertyRepresentative[] propertyRepresentatives) {
+		public void acceptProperties(int propertyOffset, NetworkedProperty[] properties) {
 			if(this.isFinished()) {
 				throw new IllegalStateException("Tried to add properties to an already finished ChunkedRegistryDecoder");
 			}
 			
-			System.arraycopy(propertyRepresentatives, 0, propertyRegistry, propertyOffset, propertyRepresentatives.length);
+			System.arraycopy(properties, 0, propertyTable, propertyOffset, properties.length);
+		}
+		
+		public void acceptPropertyClasses(int tableOffset, String[] propertyClasses) {
+			if(this.isFinished()) {
+				throw new IllegalStateException("Tried to add network-mapped property classes to an already finished ChunkedRegistryDecoder");
+			}
+			
+			System.arraycopy(propertyClasses, 0, propertyClassTable, tableOffset, propertyClasses.length);
+		}
+		
+		public void acceptPropertyStringTable(int tableOffset, String[] stringTableData) {
+			if(this.isFinished()) {
+				throw new IllegalStateException("Tried to add string table data to an already finished ChunkedRegistryDecoder");
+			}
+			
+			System.arraycopy(stringTableData, 0, propertyStringTable, tableOffset, stringTableData.length);
 		}
 
 		public void acceptBlocks(int blockInfoOffset, RegistryBlockInfoWrapper[] blockInfoArray) {
@@ -211,9 +234,25 @@ public final class BlockInfoRegistry {
 				throw new IllegalStateException("Tried to build an already finished ChunkedRegistryDecoder");
 			}
 			
-			final PropertyRepresentative[] propertyRegistry = this.propertyRegistry;
-			for(int i = 0; i < propertyRegistry.length; ++i) {
-				if(propertyRegistry[i] == null) {
+			// Ensure all data has been received
+			
+			final String[] propertyClassTable = this.propertyClassTable;
+			for(int i = 0; i < propertyClassTable.length; ++i) {
+				if(propertyClassTable[i] == null) {
+					throw new IllegalStateException("Trying to build a BlockInfoRegistry without receiving all property classes");
+				}
+			}
+			
+			final String[] propertyStringTable = this.propertyStringTable;
+			for(int i = 0; i < propertyStringTable.length; ++i) {
+				if(propertyClassTable[i] == null) {
+					throw new IllegalStateException("Trying to build a BlockInfoRegistry without receiving the entire string table");
+				}
+			}
+			
+			final NetworkedProperty[] propertyTable = this.propertyTable;
+			for(int i = 0; i < propertyTable.length; ++i) {
+				if(propertyClassTable[i] == null) {
 					throw new IllegalStateException("Trying to build a BlockInfoRegistry without receiving all properties");
 				}
 			}
@@ -225,9 +264,21 @@ public final class BlockInfoRegistry {
 				}
 			}
 			
+			// Compile properties
+			
+			final PropertyRepresentative[] propertyRegistry = this.propertyRegistry;
+			
+			NetworkedPropertyRegistry networkedRegistry = new NetworkedPropertyRegistry(propertyClassTable, propertyStringTable, propertyTable);
+			
+			networkedRegistry.compilePropertiesInto(propertyRegistry);
+			
+			// Mark this builder as finished
+			
 			this.finished = true;
 			
-			return new BlockInfoRegistry(this.propertyRegistry, this.blockRegistry);
+			// Create a new block info registry
+			
+			return new BlockInfoRegistry(networkedRegistry, propertyRegistry, blockRegistry);
 		}
 		
 		public boolean isFinished() {
@@ -235,11 +286,11 @@ public final class BlockInfoRegistry {
 		}
 	}
 	
-	private BlockInfoRegistry(PropertyRepresentative[] propertyRegistry, RegistryBlockInfoWrapper.Impl[] blockRegistry) {
+	private BlockInfoRegistry(NetworkedPropertyRegistry networkedRegistry, PropertyRepresentative[] propertyRegistry, RegistryBlockInfoWrapper.Impl[] blockRegistry) {
+		this.networkedPropertyRegistry = networkedRegistry;
 		this.propertyRegistry = propertyRegistry;
 		this.blockRegistry = blockRegistry;
 	}
-	
 
 	public static BlockInfoRegistry createRegistry(IdMapper<BlockState> mapper) {
 		final int totalStateCount = mapper.size();

@@ -14,12 +14,15 @@ import com.joshiegemfinder.synchronisedblockstates.common.network.login.QueryIdG
 import com.joshiegemfinder.synchronisedblockstates.common.network.login.Task;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryBlockInfoPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryCompletePacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyClassTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStartPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStringTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.LoginTaskProbePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.UnchunkedBlockRegistryPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedProperty;
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedPropertyRegistry;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry;
-import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresentative;
 import com.joshiegemfinder.synchronisedblockstates.common.util.RegistryBlockInfoWrapper;
 
 import io.netty.buffer.Unpooled;
@@ -32,7 +35,12 @@ import net.minecraft.world.level.block.Block;
 public class SyncBlockstatesTask implements Task {
 	public static final Task.Type<SyncBlockstatesTask> TYPE = new Task.Type<SyncBlockstatesTask>(new ResourceLocation(SynchronisedBlockstates.MOD_ID, "sync_blockstates_task"));
 
-	public static final int PROPERTY_CHUNKING_THRESHOLD = Integer.getInteger("mod.synchronisedblockstates.propertyChunkingThreshold", 1024);
+	// Measured in bytes
+	public static final int PROPERTY_CLASS_TABLE_CHUNKING_THRESHOLD_BYTES = Integer.getInteger("mod.synchronisedblockstates.propertyClassChunkingThresholdBytes", 16384);
+	public static final int PROPERTY_STRING_TABLE_CHUNKING_THRESHOLD_BYTES = Integer.getInteger("mod.synchronisedblockstates.propertyStringTableChunkingThresholdBytes", 16384);
+	public static final int PROPERTY_CHUNKING_THRESHOLD_BYTES = Integer.getInteger("mod.synchronisedblockstates.propertyChunkingThresholdBytes", 16384);
+	
+	// Not measured in bytes
 	public static final int BLOCK_CHUNKING_THRESHOLD = Integer.getInteger("mod.synchronisedblockstates.blockChunkingThreshold", 4096);
 	public static final int STATE_CHUNKING_THRESHOLD = Integer.getInteger("mod.synchronisedblockstates.stateChunkingThreshold", 32768);
 	
@@ -64,7 +72,7 @@ public class SyncBlockstatesTask implements Task {
 		
 		BlockInfoRegistry registry = BlockInfoRegistry.createRegistry(Block.BLOCK_STATE_REGISTRY);
 		
-		boolean shouldChunkData = registry.getProperties().length > PROPERTY_CHUNKING_THRESHOLD
+		boolean shouldChunkData = registry.getProperties().length > PROPERTY_CHUNKING_THRESHOLD_BYTES
 								|| registry.getBlocks().length > BLOCK_CHUNKING_THRESHOLD
 								|| registry.getStateCount() > STATE_CHUNKING_THRESHOLD;
 		
@@ -94,42 +102,158 @@ public class SyncBlockstatesTask implements Task {
 		
 		this.chunkedRegistryUUID.set(UUID.randomUUID());
 		this.chunkedRegistryCache.set(registry);
+		final NetworkedPropertyRegistry networkedRegistry = registry.getNetworkedPropertyRegistry();
 		
-		ChunkedBlockRegistryStartPacket startPacket = new ChunkedBlockRegistryStartPacket(this.chunkedRegistryUUID.get(), registry.getProperties().length, registry.getBlocks().length);
+		ChunkedBlockRegistryStartPacket startPacket = new ChunkedBlockRegistryStartPacket(this.chunkedRegistryUUID.get(),
+				networkedRegistry.getClassTableSize(), networkedRegistry.getStringTableSize(),
+				registry.getProperties().length,
+				registry.getBlocks().length
+			);
 		
 		consumer.accept(createPacket(ChunkedBlockRegistryStartPacket.TYPE, startPacket, ChunkedBlockRegistryStartPacket::encode));
+	}
+	
+	// TODO maybe merge these three methods into a single method that can be reused
+	
+	protected void sendPropertyClassesTable(Consumer<Packet<?>> consumer, UUID uuid, NetworkedPropertyRegistry networkedRegistry) {
+		final int maxSizeBytes = PROPERTY_CLASS_TABLE_CHUNKING_THRESHOLD_BYTES;
+		final String[] propertyClassTable = networkedRegistry.getRemappedPropertyClasses();
+		final int propertyClassTableSize = propertyClassTable.length;
+
+		int chunkSizeBytes = 0;
+		int chunkStartIndex = 0;
+		
+		for(int i = 0; i < propertyClassTableSize; ++i) {
+			String data = propertyClassTable[i];
+			int dataSize = 2 + data.length();
+			if(chunkSizeBytes + dataSize > maxSizeBytes) {
+				// Copy a section of the table with range [chunkStartIndex, i); that is, chunkStartIndex inclusive, i exclusive
+				String[] chunk = Arrays.copyOfRange(propertyClassTable, chunkStartIndex, i);
+				
+				// Create & send the packet
+				ChunkedBlockRegistryPropertyClassTablePacket chunkPacket = new ChunkedBlockRegistryPropertyClassTablePacket(uuid, chunkStartIndex, chunk);
+				consumer.accept(createPacket(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, chunkPacket, ChunkedBlockRegistryPropertyClassTablePacket::encode));
+				
+				// Start a new chunk at this index
+				chunkSizeBytes = 0;
+				chunkStartIndex = i;
+			}
+			
+			chunkSizeBytes += dataSize;
+		}
+		
+		// Send the final chunk
+		
+		// Get the final section of the array
+		String[] chunk = Arrays.copyOfRange(propertyClassTable, chunkStartIndex, propertyClassTableSize);
+
+		// Create & send the final packet
+		ChunkedBlockRegistryPropertyClassTablePacket chunkPacket = new ChunkedBlockRegistryPropertyClassTablePacket(uuid, chunkStartIndex, chunk);
+		consumer.accept(createPacket(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, chunkPacket, ChunkedBlockRegistryPropertyClassTablePacket::encode));
+	}
+
+	protected void sendPropertyStringTable(Consumer<Packet<?>> consumer, UUID uuid, NetworkedPropertyRegistry networkedRegistry) {
+		final int maxSizeBytes = PROPERTY_STRING_TABLE_CHUNKING_THRESHOLD_BYTES;
+		final String[] stringTable = networkedRegistry.getStringTable();
+		final int stringTableSize = stringTable.length;
+
+		int chunkSizeBytes = 0;
+		int chunkStartIndex = 0;
+		
+		for(int i = 0; i < stringTableSize; ++i) {
+			String data = stringTable[i];
+			int dataSize = 2 + data.length();
+			if(chunkSizeBytes + dataSize > maxSizeBytes) {
+				// Copy a section of the table with range [chunkStartIndex, i); that is, chunkStartIndex inclusive, i exclusive
+				String[] chunk = Arrays.copyOfRange(stringTable, chunkStartIndex, i);
+				
+				// Create & send the packet
+				ChunkedBlockRegistryStringTablePacket chunkPacket = new ChunkedBlockRegistryStringTablePacket(uuid, chunkStartIndex, chunk);
+				consumer.accept(createPacket(ChunkedBlockRegistryStringTablePacket.TYPE, chunkPacket, ChunkedBlockRegistryStringTablePacket::encode));
+				
+				// Start a new chunk at this index
+				chunkSizeBytes = 0;
+				chunkStartIndex = i;
+			}
+			
+			chunkSizeBytes += dataSize;
+		}
+		
+		// Send the final chunk
+		
+		// Get the final section of the array
+		String[] chunk = Arrays.copyOfRange(stringTable, chunkStartIndex, stringTableSize);
+
+		// Create & send the final packet
+		ChunkedBlockRegistryStringTablePacket chunkPacket = new ChunkedBlockRegistryStringTablePacket(uuid, chunkStartIndex, chunk);
+		consumer.accept(createPacket(ChunkedBlockRegistryStringTablePacket.TYPE, chunkPacket, ChunkedBlockRegistryStringTablePacket::encode));
+	}
+
+	protected void sendPropertyTable(Consumer<Packet<?>> consumer, UUID uuid, NetworkedPropertyRegistry networkedRegistry) {
+		final int maxSizeBytes = PROPERTY_CHUNKING_THRESHOLD_BYTES;
+		final NetworkedProperty[] propertyTable = networkedRegistry.getProperties();
+		final int propertyTableSize = propertyTable.length;
+
+		int chunkSizeBytes = 0;
+		int chunkStartIndex = 0;
+		
+		for(int i = 0; i < propertyTableSize; ++i) {
+			NetworkedProperty data = propertyTable[i];
+			// This is a large overestimation
+			int dataSize = 4 + 4 + 4 + 4 * data.allowedValueIndices().length;
+			if(chunkSizeBytes + dataSize > maxSizeBytes) {
+				// Copy a section of the table with range [chunkStartIndex, i); that is, chunkStartIndex inclusive, i exclusive
+				NetworkedProperty[] chunk = Arrays.copyOfRange(propertyTable, chunkStartIndex, i);
+				
+				// Create & send the packet
+				ChunkedBlockRegistryPropertyPacket chunkPacket = new ChunkedBlockRegistryPropertyPacket(uuid, chunkStartIndex, chunk);
+				consumer.accept(createPacket(ChunkedBlockRegistryPropertyPacket.TYPE, chunkPacket, ChunkedBlockRegistryPropertyPacket::encode));
+				
+				// Start a new chunk at this index
+				chunkSizeBytes = 0;
+				chunkStartIndex = i;
+			}
+			
+			chunkSizeBytes += dataSize;
+		}
+		
+		// Send the final chunk
+		
+		// Get the final section of the array
+		NetworkedProperty[] chunk = Arrays.copyOfRange(propertyTable, chunkStartIndex, propertyTableSize);
+		
+		// Create & send the final packet
+		ChunkedBlockRegistryPropertyPacket chunkPacket = new ChunkedBlockRegistryPropertyPacket(uuid, chunkStartIndex, chunk);
+		consumer.accept(createPacket(ChunkedBlockRegistryPropertyPacket.TYPE, chunkPacket, ChunkedBlockRegistryPropertyPacket::encode));
+	}
+	
+	public void sendPropertyRegistry(Consumer<Packet<?>> consumer, UUID uuid, NetworkedPropertyRegistry networkedRegistry) {
+		sendPropertyClassesTable(consumer, uuid, networkedRegistry);
+		sendPropertyStringTable(consumer, uuid, networkedRegistry);
+		sendPropertyTable(consumer, uuid, networkedRegistry);
 	}
 	
 	public void sendChunkedRegistryData(Consumer<Packet<?>> consumer) {
 		final UUID uuid = this.chunkedRegistryUUID.get();
 		
-		final PropertyRepresentative[] properties = this.chunkedRegistryCache.get().getProperties();
-		final RegistryBlockInfoWrapper.Impl[] blocks = this.chunkedRegistryCache.get().getBlocks();
+		final BlockInfoRegistry registry = this.chunkedRegistryCache.get();
+		final NetworkedPropertyRegistry networkedRegistry = registry.getNetworkedPropertyRegistry();
 		
-		final int propertyCount = properties.length;
+		final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
+		
 		final int blockCount = blocks.length;
 
 		// defer sending packets, so some cursed memory connection doesn't cause the response to be received before this function finishes executing
 		List<Packet<?>> packets = new ArrayList<Packet<?>>();
 		
+		Consumer<Packet<?>> packetAdder = (packet) -> {
+			packets.add(packet);
+			this.chunkedDataPacketsRemaining.incrementAndGet();
+		};
+		
 		try {
 			// send properties in chunks
-			{
-				final int propertyChunks = propertyCount / PROPERTY_CHUNKING_THRESHOLD;
-				
-				int counter = 0;
-				for(int i = 0; i <= propertyChunks; ++i) {
-					final int from = counter;
-					final int to = (counter += PROPERTY_CHUNKING_THRESHOLD);
-					
-					PropertyRepresentative[] propertyChunk = Arrays.copyOfRange(properties, from, Math.min(to, propertyCount));
-					ChunkedBlockRegistryPropertyPacket propertyPacket = new ChunkedBlockRegistryPropertyPacket(uuid, from, propertyChunk);
-	
-					packets.add(createPacket(ChunkedBlockRegistryPropertyPacket.TYPE, propertyPacket, ChunkedBlockRegistryPropertyPacket::encode));
-					
-					this.chunkedDataPacketsRemaining.incrementAndGet();
-				}
-			}
+			sendPropertyRegistry(packetAdder, uuid, networkedRegistry);
 			
 			// send blocks in chunks
 			{

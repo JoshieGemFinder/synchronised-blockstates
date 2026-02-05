@@ -6,9 +6,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedProperty;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry.ChunkedRegistryDecoder;
-import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresentative;
 import com.joshiegemfinder.synchronisedblockstates.common.util.RegistryBlockInfoWrapper;
 
 public class ChunkedRegistryHandler {
@@ -42,7 +42,7 @@ public class ChunkedRegistryHandler {
 		ACTIVE_DECODERS.clear();
 	}
 
-	public static boolean startDecoding(UUID uuid, int totalPropertyCount, int totalBlockCount) {
+	public static boolean startDecoding(UUID uuid, int classTableSize, int stringTableSize, int totalPropertyCount, int totalBlockCount) {
 		try {
 			ChunkedRegistryDecoder decoder = ACTIVE_DECODERS.compute(uuid, (t, u) -> {
 				if(u != null) {
@@ -50,7 +50,7 @@ public class ChunkedRegistryHandler {
 					throw new IllegalArgumentException("Unexpected attempt to start decoding on a currently in-use UUID");
 				} else {
 //					System.out.println("decode start: props = %d, blocks = %d".formatted(totalPropertyCount, totalBlockCount));
-					return BlockInfoRegistry.startChunkDecoding(uuid, totalPropertyCount, totalBlockCount);
+					return BlockInfoRegistry.startChunkDecoding(uuid, classTableSize, stringTableSize, totalPropertyCount, totalBlockCount);
 				}
 			});
 			return decoder != null;
@@ -59,10 +59,32 @@ public class ChunkedRegistryHandler {
 		}
 	}
 
-	public static boolean acceptProperties(UUID uuid, int propertyOffset, PropertyRepresentative[] propertyRepresentatives) {
+	public static boolean acceptProperties(UUID uuid, int propertyOffset, NetworkedProperty[] properties) {
 		return ifDecoderPresentOptional(uuid, (ChunkedRegistryDecoder decoder) -> {
 			if(!decoder.isFinished()) {
-				decoder.acceptProperties(propertyOffset, propertyRepresentatives);
+				decoder.acceptProperties(propertyOffset, properties);
+				return true;
+			} else {
+				return false;
+			}
+		});
+	}
+
+	public static boolean acceptPropertyClasses(UUID uuid, int tableOffset, String[] propertyClasses) {
+		return ifDecoderPresentOptional(uuid, (ChunkedRegistryDecoder decoder) -> {
+			if(!decoder.isFinished()) {
+				decoder.acceptPropertyClasses(tableOffset, propertyClasses);
+				return true;
+			} else {
+				return false;
+			}
+		});
+	}
+
+	public static boolean acceptPropertyStringTable(UUID uuid, int tableOffset, String[] stringTableData) {
+		return ifDecoderPresentOptional(uuid, (ChunkedRegistryDecoder decoder) -> {
+			if(!decoder.isFinished()) {
+				decoder.acceptPropertyStringTable(tableOffset, stringTableData);
 				return true;
 			} else {
 				return false;
