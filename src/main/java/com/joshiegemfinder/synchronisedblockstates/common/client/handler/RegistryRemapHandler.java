@@ -231,7 +231,7 @@ public class RegistryRemapHandler {
 			writer.close();
 			
 			final long endOutput = System.nanoTime();
-			SynchronisedBlockstates.LOGGER.info("Writing missing states to file took {} seconds ({} nanos)", TimeUnit.SECONDS.convert(endOutput - startOutput, TimeUnit.NANOSECONDS), endOutput - startOutput);
+			SynchronisedBlockstates.LOGGER.info("Writing missing states to file took {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(endOutput - startOutput, TimeUnit.NANOSECONDS), endOutput - startOutput);
 		} catch (IOException e) {
 			SynchronisedBlockstates.LOGGER.error("Failed to output missing states to file", e);
 		}
@@ -246,7 +246,7 @@ public class RegistryRemapHandler {
 		BlockInfoRegistryCompareHelper serverCompareHelper = new BlockInfoRegistryCompareHelper(serverRegistry);
 		final long convertServerEndTime = System.nanoTime();
 		
-		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted server registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(convertServerEndTime - convertServerStartTime, TimeUnit.NANOSECONDS), convertServerEndTime - convertServerStartTime);
+		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted server registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(convertServerEndTime - convertServerStartTime, TimeUnit.NANOSECONDS), convertServerEndTime - convertServerStartTime);
 		
 		BlockInfoRegistry clientRegistry = MappingUtil.getOriginalBlockInfoRegistry();
 		
@@ -267,8 +267,8 @@ public class RegistryRemapHandler {
 					) {
 					final long compareEndTime = System.nanoTime();
 
-					SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted current registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(convertCurrentEndTime - convertCurrentStartTime, TimeUnit.NANOSECONDS), convertCurrentEndTime - convertCurrentStartTime);
-					SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates compare current registry to server registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(compareEndTime - compareStartTime, TimeUnit.NANOSECONDS), compareEndTime - compareStartTime);
+					SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted current registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(convertCurrentEndTime - convertCurrentStartTime, TimeUnit.NANOSECONDS), convertCurrentEndTime - convertCurrentStartTime);
+					SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates compare current registry to server registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(compareEndTime - compareStartTime, TimeUnit.NANOSECONDS), compareEndTime - compareStartTime);
 					SynchronisedBlockstates.LOGGER.info("Current block registry matches server block registry");
 					
 					return ClientAckResponse.OK;
@@ -281,7 +281,7 @@ public class RegistryRemapHandler {
 		BlockInfoRegistryCompareHelper clientCompareHelper = new BlockInfoRegistryCompareHelper(clientRegistry);
 		final long convertClientEndTime = System.nanoTime();
 
-		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted original client registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(convertClientEndTime - convertClientStartTime, TimeUnit.NANOSECONDS), convertClientEndTime - convertClientStartTime);
+		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates converted original client registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(convertClientEndTime - convertClientStartTime, TimeUnit.NANOSECONDS), convertClientEndTime - convertClientStartTime);
 		
 		final long compareStartTime = System.nanoTime();
 		RegistryCompareResult clientCompareResult = RegistryCompareResult.create(clientCompareHelper, serverCompareHelper);
@@ -291,7 +291,7 @@ public class RegistryRemapHandler {
 //		SynchronisedBlockstates.LOGGER.info("Client compare result: {} [blocks only on client = {}, blocks only on server = {}, blocks on both sides = {}]",
 //				clientCompareResult, clientCompareResult.clientOnlyKeys().size(), clientCompareResult.serverOnlyKeys().size(), clientCompareResult.bothSidedBlocks().size());
 
-		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates compared client registry to server registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(compareEndTime - compareStartTime, TimeUnit.NANOSECONDS), compareEndTime - compareStartTime);
+		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates compared client registry to server registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(compareEndTime - compareStartTime, TimeUnit.NANOSECONDS), compareEndTime - compareStartTime);
 		
 		if(isOriginalRegistryOkay) {
 			if(SynchronisedBlockstatesClient.shouldOutputMissingEntries()) {
@@ -314,7 +314,7 @@ public class RegistryRemapHandler {
 		
 		MappingUtil.setCurrentMapper(remapResult.remappedRegistry());
 		final long remapEndTime = System.nanoTime();
-		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates remapped client registry to match server registry in {} seconds ({} nanos)", TimeUnit.SECONDS.convert(remapEndTime - remapStartTime, TimeUnit.NANOSECONDS), remapEndTime - remapStartTime);
+		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates remapped client registry to match server registry in {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(remapEndTime - remapStartTime, TimeUnit.NANOSECONDS), remapEndTime - remapStartTime);
 
 		if(SynchronisedBlockstatesClient.shouldOutputMissingEntries()) {
 			outputMissingEntries(clientCompareResult, remapResult.missingStates());

@@ -61,7 +61,7 @@ public class SynchronisedBlockstatesClient {
 		final long start = System.nanoTime();
 		BlockInfoRegistry registry = BlockInfoRegistry.createRegistry(originalMappings);
 		final long end = System.nanoTime();
-		SynchronisedBlockstates.LOGGER.info("Converting local blockstates to registry took {} seconds ({} nanos)", TimeUnit.SECONDS.convert(end - start, TimeUnit.NANOSECONDS), end - start);
+		SynchronisedBlockstates.LOGGER.info("Converting local blockstates to registry took {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(end - start, TimeUnit.NANOSECONDS), end - start);
 		
 		try {
 			Path outputFolderPath = Files.createDirectories(getOutputDirectory());
