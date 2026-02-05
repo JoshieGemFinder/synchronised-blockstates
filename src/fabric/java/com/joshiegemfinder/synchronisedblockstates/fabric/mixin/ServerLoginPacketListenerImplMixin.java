@@ -19,7 +19,6 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
-import net.minecraft.server.network.ServerLoginPacketListenerImpl.State;
 
 @Mixin(ServerLoginPacketListenerImpl.class)
 public class ServerLoginPacketListenerImplMixin implements TaskManagerGetter {
@@ -45,11 +44,17 @@ public class ServerLoginPacketListenerImplMixin implements TaskManagerGetter {
 	@Shadow
 	private void placeNewPlayer(ServerPlayer serverPlayer) { }
 	
+	@Shadow
+	private void handleAcceptedLogin() { }
+	
 	// ==== Content ====
 	
 	@Unique
 	@Nullable
 	private TaskManager taskManager = null;
+
+	@Unique
+	private boolean handlingTasks = false;
 
 	@Override
 	@Nullable
@@ -59,8 +64,11 @@ public class ServerLoginPacketListenerImplMixin implements TaskManagerGetter {
 	
 	@Inject(method = "tick", at = @At("HEAD"), cancellable = true)
 	public void tick(CallbackInfo ci) {
-		if(this.state == State.ACCEPTED) {
+		if(this.handlingTasks) {
 			boolean runningTasks = this.tickTaskManager();
+//			// Hack to get the fabric network addon to keep ticking
+//			// TODO double check this actually keeps it ticking
+//			this.handleAcceptedLogin();
 			if(runningTasks) {
 				ci.cancel();
 			} else {
@@ -68,6 +76,14 @@ public class ServerLoginPacketListenerImplMixin implements TaskManagerGetter {
 			}
 		}
 	}
+
+//	@Inject(method = "handleAcceptedLogin", at = @At("HEAD"), cancellable = true)
+//	public void runTaskManagerTick(CallbackInfo ci) {
+//		if(this.handlingTasks) {
+//			this.handlingTasks = this.doTasksNeedToRun();
+//			ci.cancel();
+//		}
+//	}
 
 	@Inject(
 			method = "handleAcceptedLogin", 
@@ -88,16 +104,21 @@ public class ServerLoginPacketListenerImplMixin implements TaskManagerGetter {
 						)
 				),
 			cancellable = true
-			)
+		)
 	public void checkIfTasksNeedRunning(CallbackInfo ci) {
-		boolean tasksNeedToRun;
-		if(this.taskManager == null) {
-			tasksNeedToRun = this.setupTaskManager();
-		} else {
-			tasksNeedToRun = !this.taskManager.allTasksFinishedRunning();
-		}
+		boolean tasksNeedToRun = this.doTasksNeedToRun();
+		this.handlingTasks = tasksNeedToRun;
 		if(tasksNeedToRun) {
 			ci.cancel();
+		}
+	}
+	
+	@Unique
+	public boolean doTasksNeedToRun() {
+		if(this.taskManager == null) {
+			return this.setupTaskManager();
+		} else {
+			return !this.taskManager.allTasksFinishedRunning();
 		}
 	}
 	
