@@ -4,8 +4,10 @@ import com.joshiegemfinder.synchronisedblockstates.common.SynchronisedBlockstate
 import com.joshiegemfinder.synchronisedblockstates.common.network.login.TaskManagerGetter;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryBlockInfoPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryCompletePacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyClassTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryPropertyPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStartPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryStringTablePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.LoginTaskProbePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.UnchunkedBlockRegistryPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.task.SyncBlockstatesTask;
@@ -46,17 +48,19 @@ public class SynchronisedBlockstatesNetworkFabric {
 	
 	public static void registerPackets() {
 		ServerLoginNetworking.registerGlobalReceiver(LoginTaskProbePacket.TYPE, (server, handler, understood, buf, synchronizer, responseSender) -> {
-			LoginTaskProbePacket packet = LoginTaskProbePacket.decode(buf);
+			LoginTaskProbePacket packet = understood ? LoginTaskProbePacket.decode(buf) : null;
 			
-			if(packet.networkVersion() != SynchronisedBlockstates.NETWORK_VERSION) {
-				SynchronisedBlockstates.LOGGER.warn("Connecting client running network version {} to a server running network version {}", packet.networkVersion(), SynchronisedBlockstates.NETWORK_VERSION);
+			if(packet == null) {
+				SynchronisedBlockstates.LOGGER.warn("Connecting client {} is not running synchronised blockstates", handler.getUserName());
+			} else if(packet.networkVersion() != SynchronisedBlockstates.NETWORK_VERSION) {
+				SynchronisedBlockstates.LOGGER.warn("Connecting client {} is running network version {}, but connecting to a server running network version {}", handler.getUserName(), packet.networkVersion(), SynchronisedBlockstates.NETWORK_VERSION);
 			}
 			
 			if(!(handler instanceof TaskManagerGetter taskManagerGetter)) {
 				return;
 			}
 			
-			if(!understood) {
+			if(!understood || packet == null) {
 				// they are not running synchronised blockstates, don't send them the full state registry because they'll just discard it
 				taskManagerGetter.completeTask(SyncBlockstatesTask.TYPE);
 			} else {
@@ -101,6 +105,10 @@ public class SynchronisedBlockstatesNetworkFabric {
 				task.sendChunkedRegistryData(responseSender::sendPacket);
 			}
 		});
+
+		ServerLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, SynchronisedBlockstatesNetworkFabric::taskDataResponse);
+		
+		ServerLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryStringTablePacket.TYPE, SynchronisedBlockstatesNetworkFabric::taskDataResponse);
 
 		ServerLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyPacket.TYPE, SynchronisedBlockstatesNetworkFabric::taskDataResponse);
 
