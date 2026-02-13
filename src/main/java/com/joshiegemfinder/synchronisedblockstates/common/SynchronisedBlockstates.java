@@ -9,6 +9,7 @@ public class SynchronisedBlockstates {
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	public static final int NETWORK_VERSION = 5;
+	public static final int[] SUPPORTED_FALLBACK_NETWORK_VERSIONS = new int[0];
 
 	public static void onInitialize() {
 		
