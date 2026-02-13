@@ -245,14 +245,14 @@ public final class BlockInfoRegistry {
 			
 			final String[] propertyStringTable = this.propertyStringTable;
 			for(int i = 0; i < propertyStringTable.length; ++i) {
-				if(propertyClassTable[i] == null) {
+				if(propertyStringTable[i] == null) {
 					throw new IllegalStateException("Trying to build a BlockInfoRegistry without receiving the entire string table");
 				}
 			}
 			
 			final NetworkedProperty[] propertyTable = this.propertyTable;
 			for(int i = 0; i < propertyTable.length; ++i) {
-				if(propertyClassTable[i] == null) {
+				if(propertyTable[i] == null) {
 					throw new IllegalStateException("Trying to build a BlockInfoRegistry without receiving all properties");
 				}
 			}
