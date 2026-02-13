@@ -117,7 +117,7 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			
 			FriendlyByteBuf responseBuf = PacketByteBufs.create();
 			
-			VelocityCustomQueryResponsePacket.encode(buf, responsePacket);
+			VelocityCustomQueryResponsePacket.encode(responseBuf, responsePacket);
 			
 			responseSender.sendPacket(VelocityCustomQueryResponsePacket.TYPE, responseBuf, (PacketSendListener)null);
 		});
