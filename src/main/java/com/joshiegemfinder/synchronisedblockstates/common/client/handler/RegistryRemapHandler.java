@@ -90,24 +90,13 @@ public class RegistryRemapHandler {
 		}
 	}
 	
-	private static boolean hasReceivedRegistryDuringLoginPhase = false;
-
-	public static void onLoginPhaseBegan(boolean isMemoryConnection) {
-		if(isMemoryConnection) {
-			MappingUtil.restoreToOriginalBlockStateRegistry();
-		}
-		hasReceivedRegistryDuringLoginPhase = false;
-	}
-	
-	public static void onLoginPhaseEnd(boolean isMemoryConnection) {
-		if(!hasReceivedRegistryDuringLoginPhase && !isMemoryConnection) {
-			SynchronisedBlockstates.LOGGER.warn("Synchronised Blockstates did not receive a block registry from server during the login phase, attempting to revert to vanilla mappings...");
-			
-			BlockInfoRegistry vanillaBlocks = SynchronisedBlockstatesClient.readVanillaBlockstates();
-			
-			if(vanillaBlocks != null) {
-				handleRegistryReceived(vanillaBlocks);
-			}
+	public static void revertToVanillaBlockstates() {
+		SynchronisedBlockstates.LOGGER.warn("Synchronised Blockstates did not receive a block registry from server during the expected phase, attempting to revert to vanilla mappings...");
+		
+		BlockInfoRegistry vanillaBlocks = SynchronisedBlockstatesClient.readVanillaBlockstates();
+		
+		if(vanillaBlocks != null) {
+			handleRegistryReceived(vanillaBlocks);
 		}
 	}
 
@@ -238,7 +227,7 @@ public class RegistryRemapHandler {
 	}
 	
 	public static ClientAckResponse handleRegistryReceived(BlockInfoRegistry serverRegistry) {
-		hasReceivedRegistryDuringLoginPhase = true;
+		ClientNetworkHandler.markRegistryRecieved();
 		
 		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates is remapping the block registry");
 		

@@ -1,9 +1,14 @@
 package com.joshiegemfinder.synchronisedblockstates.fabric.network.client;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.Nullable;
 
 import com.joshiegemfinder.synchronisedblockstates.common.SynchronisedBlockstates;
 import com.joshiegemfinder.synchronisedblockstates.common.client.handler.ChunkedRegistryHandler;
+import com.joshiegemfinder.synchronisedblockstates.common.client.handler.ClientNetworkHandler;
 import com.joshiegemfinder.synchronisedblockstates.common.client.handler.RegistryRemapHandler;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryBlockInfoPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.ChunkedBlockRegistryCompletePacket;
@@ -14,24 +19,29 @@ import com.joshiegemfinder.synchronisedblockstates.common.network.packet.Chunked
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.LoginTaskProbePacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.packet.UnchunkedBlockRegistryPacket;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.ClientAckResponse;
+import com.joshiegemfinder.synchronisedblockstates.common.network.velocity.packet.VelocityCustomQueryPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.velocity.packet.VelocityCustomQueryResponsePacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.velocity.packet.VelocityNetworkInfoPacket;
+import com.joshiegemfinder.synchronisedblockstates.common.network.velocity.packet.VelocityNetworkInfoPacket.ConfigurationStatus;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientLoginNetworking;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.PacketSendListener;
+import net.minecraft.resources.ResourceLocation;
 
 public class SynchronisedBlockstatesNetworkFabricClient {
 
-	public static void registerPackets() {
+	public static void registerLoginPackets() {
 		// Let the server know we're running synchronised blockstates
 		ClientLoginNetworking.registerGlobalReceiver(LoginTaskProbePacket.TYPE, (client, handler, buf, listenerAdder) -> {
 			LoginTaskProbePacket packet = LoginTaskProbePacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.debug("Recieved Login Probe Packet for network version {} (client network version is {})", packet.networkVersion(), SynchronisedBlockstates.NETWORK_VERSION);
-
-			if(packet.networkVersion() != SynchronisedBlockstates.NETWORK_VERSION) {
-				SynchronisedBlockstates.LOGGER.warn("Connecting to a server running network version {} on a client running network version {}", packet.networkVersion(), SynchronisedBlockstates.NETWORK_VERSION);
-			}
+			
+			ClientNetworkHandler.setServerNetworkVersion(packet.networkVersion(), packet.fallbackNetworkVersions());
 			
 			{
 				FriendlyByteBuf buffer = PacketByteBufs.create();
@@ -48,6 +58,9 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 		ClientLoginNetworking.registerGlobalReceiver(LoginTaskProbePacket.VELOCITY_TYPE, (client, handler, buf, listenerAdder) -> {
 			SynchronisedBlockstates.LOGGER.debug("Recieved Login Probe Packet for a velocity server with unknown server network version (client network version is {})", SynchronisedBlockstates.NETWORK_VERSION);
 
+			// Tell the connection manager that we're connected to a velocity server
+			ClientNetworkHandler.setVelocityMode(true);
+			
 			// Respond with the client's network version
 			FriendlyByteBuf buffer = PacketByteBufs.create();
 			
@@ -57,9 +70,74 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			return CompletableFuture.completedFuture(buffer);
 		});
 		
+	}
+
+	public static final Map<ResourceLocation, ConfigurationQueryRequestHandler> CONFIGURATION_PACKET_HANDLERS = new ConcurrentHashMap<>();
+	
+	public static void registerPlayPackets() {
+		ClientPlayNetworking.registerGlobalReceiver(VelocityNetworkInfoPacket.TYPE, (client, handler, buf, responseSender) -> {
+			VelocityNetworkInfoPacket packet = VelocityNetworkInfoPacket.decode(buf);
+			
+			if(packet.configStatus() == ConfigurationStatus.BEGINNING_CONFIGURATION) {
+				ClientNetworkHandler.onVelocityConfigurationStart();
+			} else if(packet.configStatus() == ConfigurationStatus.ENDING_CONFIGURATION) {
+				ClientNetworkHandler.onVelocityConfigurationEnd();
+			}
+
+			LoginTaskProbePacket serverNetworkVersion = packet.serverNetworkVersion();
+			if(serverNetworkVersion != null) {
+				ClientNetworkHandler.setServerNetworkVersion(serverNetworkVersion.networkVersion(), serverNetworkVersion.fallbackNetworkVersions());
+			}
+		});
+		
+		ClientPlayNetworking.registerGlobalReceiver(VelocityCustomQueryPacket.TYPE, (client, handler, buf, responseSender) -> {
+			// Read the custom query
+			VelocityCustomQueryPacket customQueryPacket = VelocityCustomQueryPacket.decode(buf);
+
+			ResourceLocation channelId = customQueryPacket.channelId();
+			int transactionId = customQueryPacket.transactionId();
+			
+			// Get the custom query response handler if present
+			ConfigurationQueryRequestHandler configurationHandler = CONFIGURATION_PACKET_HANDLERS.get(channelId);
+			
+			// The packet to send back
+			VelocityCustomQueryResponsePacket responsePacket;
+			
+			// If we understand it
+			if(configurationHandler != null) {
+				FriendlyByteBuf requestBuf = PacketByteBufs.create();
+				requestBuf.writeBytes(customQueryPacket.data());
+				@Nullable FriendlyByteBuf response = configurationHandler.receive(client, requestBuf);
+				
+				responsePacket = new VelocityCustomQueryResponsePacket(transactionId, response);
+			} else {
+				// If we don't understand it
+				responsePacket = new VelocityCustomQueryResponsePacket(transactionId, (byte[])null);
+			}
+			
+			FriendlyByteBuf responseBuf = PacketByteBufs.create();
+			
+			VelocityCustomQueryResponsePacket.encode(buf, responsePacket);
+			
+			responseSender.sendPacket(VelocityCustomQueryResponsePacket.TYPE, responseBuf, (PacketSendListener)null);
+		});
+	}
+	
+	public static void registerConfigurationPacket(ResourceLocation channelName, ConfigurationQueryRequestHandler handler) {
+		// Register the packet to handle itself in the LOGIN phase
+		ClientLoginNetworking.registerGlobalReceiver(channelName, (client, _handler, buf, _listenerAdder) -> {
+			FriendlyByteBuf responseBuf = handler.receive(client, buf);
+
+			return CompletableFuture.completedFuture(responseBuf);
+		});
+		
+		CONFIGURATION_PACKET_HANDLERS.put(channelName, handler);
+	}
+	
+	public static void registerConfigurationPackets() {
 
 		// Handle an unchunked block registry packet
-		ClientLoginNetworking.registerGlobalReceiver(UnchunkedBlockRegistryPacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(UnchunkedBlockRegistryPacket.TYPE, (client, buf) -> {
 			UnchunkedBlockRegistryPacket packet = UnchunkedBlockRegistryPacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved unchunked blockstate registry from server...");
@@ -69,12 +147,12 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			
 			FriendlyByteBuf responseBuf = PacketByteBufs.create();
 			responseBuf.writeUtf(response.getSerializedName());
-			return CompletableFuture.completedFuture(responseBuf);
+			return responseBuf;
 		});
 		
 
 		// Handle chunked block registry packets
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryStartPacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryStartPacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryStartPacket packet = ChunkedBlockRegistryStartPacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunking start packet from server [UUID = {}]...", packet.uuid());
@@ -83,53 +161,53 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			
 			FriendlyByteBuf responseBuf = PacketByteBufs.create();
 			responseBuf.writeBoolean(decodeYes);
-			return CompletableFuture.completedFuture(responseBuf);
+			return responseBuf;
 		});
 
 		// Decode property class string table
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryPropertyClassTablePacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryPropertyClassTablePacket packet = ChunkedBlockRegistryPropertyClassTablePacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunked class table packet from server [UUID = {}]...", packet.uuid());
 			
 			ChunkedRegistryHandler.acceptPropertyClasses(packet.uuid(), packet.tableOffset(), packet.tableChunk());
 			
-			return CompletableFuture.completedFuture(PacketByteBufs.create());
+			return PacketByteBufs.empty();
 		});
 
 		// Decode property name/value string table
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryStringTablePacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryStringTablePacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryStringTablePacket packet = ChunkedBlockRegistryStringTablePacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunked string table packet from server [UUID = {}]...", packet.uuid());
 			
 			ChunkedRegistryHandler.acceptPropertyStringTable(packet.uuid(), packet.tableOffset(), packet.tableChunk());
 			
-			return CompletableFuture.completedFuture(PacketByteBufs.create());
+			return PacketByteBufs.empty();
 		});
 
 		// Decode property instance table
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryPropertyPacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryPropertyPacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryPropertyPacket packet = ChunkedBlockRegistryPropertyPacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunked property table packet from server [UUID = {}]...", packet.uuid());
 			
 			ChunkedRegistryHandler.acceptProperties(packet.uuid(), packet.propertyOffset(), packet.propertyRepresentatives());
 			
-			return CompletableFuture.completedFuture(PacketByteBufs.create());
+			return PacketByteBufs.empty();
 		});
 
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryBlockInfoPacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryBlockInfoPacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryBlockInfoPacket packet = ChunkedBlockRegistryBlockInfoPacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunked block info packet from server [UUID = {}]...", packet.uuid());
 			
 			ChunkedRegistryHandler.acceptBlockInfo(packet.uuid(), packet.blockInfoOffset(), packet.blockInfoArray());
 			
-			return CompletableFuture.completedFuture(PacketByteBufs.create());
+			return PacketByteBufs.empty();
 		});
 
-		ClientLoginNetworking.registerGlobalReceiver(ChunkedBlockRegistryCompletePacket.TYPE, (client, handler, buf, listenerAdder) -> {
+		registerConfigurationPacket(ChunkedBlockRegistryCompletePacket.TYPE, (client, buf) -> {
 			ChunkedBlockRegistryCompletePacket packet = ChunkedBlockRegistryCompletePacket.decode(buf);
 
 			SynchronisedBlockstates.LOGGER.info("Recieved chunking complete packet from server [UUID = {}]...", packet.uuid());
@@ -140,8 +218,21 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			
 			FriendlyByteBuf responseBuf = PacketByteBufs.create();
 			responseBuf.writeUtf(response.getSerializedName());
-			return CompletableFuture.completedFuture(responseBuf);
+			return responseBuf;
 		});
+		
+	}
+	
+	
+	public static void registerPackets() {
+		// Registers network info and "you're logging into a velocity server" messages
+		registerLoginPackets();
+
+		// Register packets we need because of velocity
+		registerPlayPackets();
+		
+		// Register packets that can be reconfigured on a velocity server
+		registerConfigurationPackets();
 	}
 
 }

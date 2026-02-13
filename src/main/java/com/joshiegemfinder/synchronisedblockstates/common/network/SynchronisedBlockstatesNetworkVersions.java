@@ -9,5 +9,8 @@ public class SynchronisedBlockstatesNetworkVersions {
 	
 	// The network version that fallback network versions were introduced
 	public static final int FALLBACK_VERSIONS_INTRODUCED = 5;
+
+	// Velocity query passthrough introduced
+	public static final int VELOCITY_QUERY_SUPPORT_INTRODUCED = 6;
 	
 }
