@@ -15,6 +15,8 @@ import net.minecraft.resources.ResourceLocation;
  * 1. Configuration begins
  * 2. Configuration is still happening
  * 3. Configuration ends
+ * 
+ * The server network version is sent to the client when it becomes available, under CONTINUING_CONFIGURATION
  */
 public record VelocityNetworkInfoPacket(ConfigurationStatus configStatus, @Nullable LoginTaskProbePacket serverNetworkVersion) {
 	public static final ResourceLocation TYPE = new ResourceLocation(SynchronisedBlockstates.MOD_ID, "velocity_network_info");
@@ -29,7 +31,7 @@ public record VelocityNetworkInfoPacket(ConfigurationStatus configStatus, @Nulla
 	}
 	
 	public static void encode(FriendlyByteBuf buf, VelocityNetworkInfoPacket packet) {
-		buf.writeEnum(packet.configStatus);
+		buf.writeInt(packet.configStatus().ordinal());
 		LoginTaskProbePacket serverNetworkVersion = packet.serverNetworkVersion();
 		buf.writeBoolean(serverNetworkVersion != null);
 		if(serverNetworkVersion != null) {
@@ -38,7 +40,8 @@ public record VelocityNetworkInfoPacket(ConfigurationStatus configStatus, @Nulla
 	}
 	
 	public static VelocityNetworkInfoPacket decode(FriendlyByteBuf buf) {
-		ConfigurationStatus configurationStatus = buf.readEnum(ConfigurationStatus.class);
+		int configurationStatusOrdinal = buf.readInt();
+		ConfigurationStatus configurationStatus = ConfigurationStatus.values()[configurationStatusOrdinal];
 		boolean hasServerNetworkVersion = buf.readBoolean();
 		LoginTaskProbePacket serverNetworkVersion;
 		if(hasServerNetworkVersion) {

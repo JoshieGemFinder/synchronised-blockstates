@@ -24,6 +24,20 @@ public record VelocityCustomQueryResponsePacket(int transactionId, @Nullable byt
 	public VelocityCustomQueryResponsePacket(int transactionId, @Nullable ByteBuf data) {
 		this(transactionId, data == null ? null : toBytes(data));
 	}
+
+	public static void encode(FriendlyByteBuf buf, VelocityCustomQueryResponsePacket packet) {
+		buf.writeInt(packet.transactionId());
+		byte[] data = packet.data();
+		boolean understood = data != null;
+		
+		buf.writeBoolean(understood);
+		
+		if(understood) {
+			int dataSize = data.length;
+			buf.writeInt(dataSize);
+			buf.writeBytes(data);
+		}
+	}
 	
 	public static VelocityCustomQueryResponsePacket decode(FriendlyByteBuf buf) {
 		int transactionId = buf.readInt();
@@ -40,19 +54,5 @@ public record VelocityCustomQueryResponsePacket(int transactionId, @Nullable byt
 		}
 		
 		return new VelocityCustomQueryResponsePacket(transactionId, data);
-	}
-
-	public static void encode(FriendlyByteBuf buf, VelocityCustomQueryResponsePacket packet) {
-		buf.writeInt(packet.transactionId());
-		byte[] data = packet.data();
-		boolean understood = data != null;
-		
-		buf.writeBoolean(understood);
-		
-		if(understood) {
-			int dataSize = data.length;
-			buf.writeInt(dataSize);
-			buf.writeBytes(data);
-		}
 	}
 }
