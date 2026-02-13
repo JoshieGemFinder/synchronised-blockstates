@@ -229,6 +229,10 @@ public class RegistryRemapHandler {
 	public static ClientAckResponse handleRegistryReceived(BlockInfoRegistry serverRegistry) {
 		ClientNetworkHandler.markRegistryRecieved();
 		
+		if(SynchronisedBlockstatesClient.shouldDumpServerBlockstates()) {
+			SynchronisedBlockstatesClient.dumpMappingsToFile(serverRegistry, "serverblockstates.dat");
+		}
+		
 		SynchronisedBlockstates.LOGGER.info("Synchronised Blockstates is remapping the block registry");
 		
 		final long convertServerStartTime = System.nanoTime();

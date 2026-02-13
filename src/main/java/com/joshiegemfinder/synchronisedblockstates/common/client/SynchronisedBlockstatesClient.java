@@ -50,6 +50,10 @@ public class SynchronisedBlockstatesClient {
 		return getPropertyBoolean("mod.synchronisedblockstates.dumpAllStates", false);
 	}
 
+	public static boolean shouldDumpServerBlockstates() {
+		return getPropertyBoolean("mod.synchronisedblockstates.dumpServerStates", false);
+	}
+
 	public static boolean shouldOutputMissingEntries() {
 		return getPropertyBoolean("mod.synchronisedblockstates.outputMissingBlockstates", false);
 	}
@@ -63,9 +67,13 @@ public class SynchronisedBlockstatesClient {
 		final long end = System.nanoTime();
 		SynchronisedBlockstates.LOGGER.info("Converting local blockstates to registry took {} milliseconds ({} nanos)", TimeUnit.MILLISECONDS.convert(end - start, TimeUnit.NANOSECONDS), end - start);
 		
+		dumpMappingsToFile(registry, "vanillablockstates.dat");
+	}
+
+	public static void dumpMappingsToFile(BlockInfoRegistry registry, String filename) {
 		try {
 			Path outputFolderPath = Files.createDirectories(getOutputDirectory());
-			File file = outputFolderPath.resolve("vanillablockstates.dat").toFile();
+			File file = outputFolderPath.resolve(filename).toFile();
 			FileOutputStream stream = new FileOutputStream(file);
 			DataOutputStream output = new DataOutputStream(stream);
 			
