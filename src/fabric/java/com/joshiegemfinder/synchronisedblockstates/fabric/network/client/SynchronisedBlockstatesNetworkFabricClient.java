@@ -44,6 +44,19 @@ public class SynchronisedBlockstatesNetworkFabricClient {
 			}
 		});
 		
+		// Alternative way of letting the server know we run synchronised blockstates if it's behind a velocity proxy
+		ClientLoginNetworking.registerGlobalReceiver(LoginTaskProbePacket.VELOCITY_TYPE, (client, handler, buf, listenerAdder) -> {
+			SynchronisedBlockstates.LOGGER.debug("Recieved Login Probe Packet for a velocity server with unknown server network version (client network version is {})", SynchronisedBlockstates.NETWORK_VERSION);
+
+			// Respond with the client's network version
+			FriendlyByteBuf buffer = PacketByteBufs.create();
+			
+			LoginTaskProbePacket response = new LoginTaskProbePacket();
+			LoginTaskProbePacket.encode(buffer, response);
+			
+			return CompletableFuture.completedFuture(buffer);
+		});
+		
 
 		// Handle an unchunked block registry packet
 		ClientLoginNetworking.registerGlobalReceiver(UnchunkedBlockRegistryPacket.TYPE, (client, handler, buf, listenerAdder) -> {
