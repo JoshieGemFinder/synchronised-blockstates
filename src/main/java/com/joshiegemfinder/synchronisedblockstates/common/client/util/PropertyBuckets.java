@@ -1,6 +1,5 @@
 package com.joshiegemfinder.synchronisedblockstates.common.client.util;
 
-import com.joshiegemfinder.synchronisedblockstates.common.client.util.PropertyBuckets.PropertyNameBucket.TrackingNameBucketGenerator;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedProperty;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedPropertyRegistry;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry;
@@ -11,10 +10,13 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
+import it.unimi.dsi.fastutil.ints.IntSets;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
+import it.unimi.dsi.fastutil.objects.Reference2IntMaps;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 
 /**
  * Breaks up a property registry into "buckets" that can be navigated faster than a flat array.
@@ -41,26 +43,9 @@ public final class PropertyBuckets {
 			this.properties.add(new PropertyWrapper(propertyIndex, runtimeProperty));
 		}
 		
-		public static class TrackingNameBucketGenerator implements Int2ObjectFunction<PropertyNameBucket> {
-			private final IntSet nameIndexSet;
-			private final String[] stringTable;
-			
-			public TrackingNameBucketGenerator(String[] stringTable) {
-				this.nameIndexSet = new IntOpenHashSet(stringTable.length);
-				this.stringTable = stringTable;
-			}
-
-			@Override
-			public PropertyNameBucket get(int key) {
-				this.nameIndexSet.add(key);
-				return new PropertyNameBucket(stringTable[key]);
-			}
-			
-			public IntSet getNameIndexSet() {
-				return this.nameIndexSet;
-			}
+		public boolean isEmpty() {
+			return this.properties.size() == 0;
 		}
-		
 	}
 	
 	public static record PropertyClassBucket(String networkPropertyClass, String runtimePropertyClass, Int2ObjectMap<PropertyNameBucket> nameBuckets) {
@@ -81,8 +66,13 @@ public final class PropertyBuckets {
 			return nameBuckets.computeIfAbsent(nameIndex, generator);
 		}
 		
+		public boolean isEmpty() {
+			return this.nameBuckets.size() == 0;
+		}
+		
 	}
-	
+
+	private final int totalBucketCount;
 	private final PropertyClassBucket[] classBuckets;
 	// Maps RUNTIME property class --> property class index in the property class table
 	// Reference2Int because all insertions and retrievals will be with interned strings
@@ -90,9 +80,14 @@ public final class PropertyBuckets {
 	// Maps property name --> property name index in the string table
 	// Reference2Int because all insertions and retrievals will be with interned strings
 	private final Reference2IntMap<String> propertyNameToIndexMap;
+	// Set of all property name indexes
+	private final IntSet propertyNameIndexSet;
+	
+	private final NetworkedPropertyRegistry networkedRegistry;
 	
 	public PropertyBuckets(BlockInfoRegistry registry) {
 		NetworkedPropertyRegistry networkedRegistry = registry.getNetworkedPropertyRegistry();
+		this.networkedRegistry = networkedRegistry;
 		
 		// Maybe intern runtime class table and string table for when buckets are compared later on
 		networkedRegistry.internTables();
@@ -112,13 +107,18 @@ public final class PropertyBuckets {
 		
 		// Create array of class name buckets
 		final PropertyClassBucket[] classBuckets = this.classBuckets = new PropertyClassBucket[propertyClassTableSize];
+		// Generator for name buckets by indexing the string table - additionally, adds the index to propertyNameIndexSet
+		final Int2ObjectFunction<PropertyNameBucket> nameBucketGenerator = PropertyNameBucket.generateFromStringTable(stringTable);
 		
 		// Create reverse map for property class to class table index
-		Reference2IntMap<String> propertyClassToIndexMap = this.propertyClassToIndexMap = new Reference2IntOpenHashMap<>(propertyClassTableSize);
+		Reference2IntOpenHashMap<String> propertyClassToIndexMap;
+		this.propertyClassToIndexMap = propertyClassToIndexMap = new Reference2IntOpenHashMap<>(propertyClassTableSize);
 		propertyClassToIndexMap.defaultReturnValue(-1);
 		
-		// Generates name buckets by indexing the string table - additionally, adds the index to propertyNameIndexSet
-		final TrackingNameBucketGenerator nameBucketGenerator = new TrackingNameBucketGenerator(stringTable);
+		// Track the total number of buckets created
+		int totalBucketCount = 0;
+		// Set of all string table indexes of name buckets
+		final IntOpenHashSet nameIndexSet = new IntOpenHashSet(stringTable.length);
 		
 		for(int propertyIndex = 0; propertyIndex < propertyTableSize; ++propertyIndex) {
 			NetworkedProperty networkedProperty = networkProperties[propertyIndex];
@@ -140,25 +140,56 @@ public final class PropertyBuckets {
 			
 			PropertyNameBucket nameBucket = bucket.getOrCreateNameBucket(nameIndex, nameBucketGenerator);
 			
+			// If the bucket was just created (it's empty)
+			if(nameBucket.isEmpty()) {
+				nameIndexSet.add(nameIndex);
+				++totalBucketCount;
+			}
+			
 			// Add this property to the (property class, property name) bucket
 			nameBucket.addProperty(propertyIndex, runtimeProperty);
 		}
-		
-		// Set of all string table indexes of name buckets
-		IntSet nameIndexSet = nameBucketGenerator.getNameIndexSet();
 
+		// Trim property name index set to make it faster
+		nameIndexSet.trim();
+		this.propertyNameIndexSet = IntSets.unmodifiable(nameIndexSet);
+		
 		// Create reverse map for property name to string table index
-		Reference2IntMap<String> propertyNameToIndexMap = this.propertyNameToIndexMap = new Reference2IntOpenHashMap<>(nameIndexSet.size());
+		Reference2IntOpenHashMap<String> propertyNameToIndexMap = new Reference2IntOpenHashMap<>(nameIndexSet.size());
 		propertyNameToIndexMap.defaultReturnValue(-1);
 
 		// Populate the property name string --> string table index map
+		// Populate the property name array
 		for(int nameIndex : nameIndexSet) {
 			String propertyName = stringTable[nameIndex];
 			propertyNameToIndexMap.put(propertyName, nameIndex);
 		}
+		
+		// Trim string --> int maps to make them faster
+		propertyClassToIndexMap.trim();
+		propertyNameToIndexMap.trim();
+		this.propertyNameToIndexMap = Reference2IntMaps.unmodifiable(propertyNameToIndexMap);
+		
+		
+		// Store the total amount of buckets
+		this.totalBucketCount = totalBucketCount;
 	}
 	
-	public PropertyClassBucket[] getBuckets() {
+	/**
+	 * @return the number of unique (property class, property name) buckets created
+	 */
+	public int getTotalBucketCount() {
+		return this.totalBucketCount;
+	}
+
+	/**
+	 * @return the number of unique (property class) buckets created
+	 */
+	public int getClassBucketCount() {
+		return this.classBuckets.length;
+	}
+	
+	public PropertyClassBucket[] getClassBuckets() {
 		return this.classBuckets;
 	}
 	
@@ -197,4 +228,15 @@ public final class PropertyBuckets {
 		return this.propertyNameToIndexMap.getInt(propertyName);
 	}
 	
+	public IntSet getPropertyNameIndexSet() {
+		return this.propertyNameIndexSet;
+	}
+	
+	public ReferenceSet<String> getPropertyNameStrings() {
+		return this.propertyNameToIndexMap.keySet();
+	}
+	
+	public NetworkedPropertyRegistry getNetworkedRegistry() {
+		return this.networkedRegistry;
+	}
 }
