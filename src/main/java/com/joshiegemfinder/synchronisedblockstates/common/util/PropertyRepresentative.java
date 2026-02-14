@@ -24,6 +24,18 @@ public record PropertyRepresentative(String name, String propertyClass, String[]
 	public static int compare(Property<?> property1, Property<?> property2) {
 		return String.CASE_INSENSITIVE_ORDER.compare(property1.getName(), property2.getName());
 	}
+
+	public static String internString(String string) {
+//		return string.intern();
+		return STRING_INTERNER.addOrGet(string);
+	}
+	
+	public static void internStrings(String[] stringTable) {
+		final int stringTableSize = stringTable.length;
+		for(int i = 0; i < stringTableSize; ++i) {
+			stringTable[i] = internString(stringTable[i]);
+		}
+	}
 	
 	@Deprecated
 	public PropertyRepresentative(String name, String propertyClass, String[] allowedValues) {
@@ -53,14 +65,14 @@ public record PropertyRepresentative(String name, String propertyClass, String[]
 		}
 		return names;
 	}
-	
+
 	public static PropertyRepresentative create(String name, String propertyClass, String[] allowedValues) {
 		return PROPERTY_INTERNER.computeIfAbsent(new InternKey(name, propertyClass, allowedValues), (PropertyRepresentative.InternKey key) -> {
 			key.intern();
 			return new PropertyRepresentative(key.name, key.propertyClass, key.allowedValues);
 		});
 	}
-	
+
 	public static void encode(FriendlyByteBuf buf, final PropertyRepresentative property) {
 		buf.writeUtf(property.name);
 		String propertyClass = property.propertyClass;
@@ -128,14 +140,9 @@ public record PropertyRepresentative(String name, String propertyClass, String[]
 		
 		public void intern() {
 			if(this.hasInterned) return; 
-//			this.name = this.name.intern();
-			this.name = STRING_INTERNER.addOrGet(this.name);
-//			this.propertyClass = this.propertyClass.intern();
-			this.propertyClass = STRING_INTERNER.addOrGet(this.propertyClass);
-			for(int i = 0; i < this.allowedValues.length; ++i) {
-//				this.allowedValues[i] = this.allowedValues[i].intern();
-				this.allowedValues[i] = STRING_INTERNER.addOrGet(this.allowedValues[i]);
-			}
+			this.name = internString(this.name);
+			this.propertyClass = internString(this.propertyClass);
+			internStrings(this.allowedValues);
 			this.hasInterned = true;
 		}
 		
