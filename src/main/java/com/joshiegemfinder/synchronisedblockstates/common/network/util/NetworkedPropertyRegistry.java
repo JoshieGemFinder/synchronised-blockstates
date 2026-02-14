@@ -23,18 +23,37 @@ import net.minecraft.network.FriendlyByteBuf;
  *     </ol>
  * </p>
  */
-public record NetworkedPropertyRegistry(
-		String[] remappedPropertyClasses,
-		String[] stringTable,
-		NetworkedProperty[] properties
-	) {
+public final class NetworkedPropertyRegistry {
+
+	private final String[] remappedPropertyClasses;
+	private final String[] stringTable;
+	private final NetworkedProperty[] properties;
+	private String[] runtimePropertyClasses;
+	private boolean isInterned = false;
+
+	public NetworkedPropertyRegistry(String[] remappedPropertyClasses, String[] stringTable, NetworkedProperty[] properties, String[] runtimePropertyClasses, boolean isInterned) {
+		this.remappedPropertyClasses = remappedPropertyClasses;
+		this.stringTable = stringTable;
+		this.properties = properties;
+		this.runtimePropertyClasses = runtimePropertyClasses;
+		this.isInterned = isInterned;
+	}
+
+	public NetworkedPropertyRegistry(String[] remappedPropertyClasses, String[] stringTable, NetworkedProperty[] properties, String[] runtimePropertyClasses) {
+		this(remappedPropertyClasses, stringTable, properties, runtimePropertyClasses, false);
+	}
 	
+	public NetworkedPropertyRegistry(String[] remappedPropertyClasses, String[] stringTable, NetworkedProperty[] properties) {
+		this(remappedPropertyClasses, stringTable, properties, null, false);
+	}
+
 	// Note: it would be possible to get rid of NetworkedProperty and instead replace it with just a really big array of integers
 	
 	public static NetworkedPropertyRegistry create(PropertyRepresentative[] propertyRegistry) {
 		final int propertyCount = propertyRegistry.length;
 		
 		// Reference2Int because PropertyRepresentative interns its property class
+		final ObjectArrayList<String> runtimePropertyClassesList = new ObjectArrayList<>(1024);
 		final ObjectArrayList<String> remappedPropertyClassesList = new ObjectArrayList<>(1024);
 		final Reference2IntOpenHashMap<String> remappedPropertyClassInterner = new Reference2IntOpenHashMap<>(1024);
 		
@@ -48,6 +67,7 @@ public record NetworkedPropertyRegistry(
 			final int index = remappedPropertyClassesList.size();
 			// Convert to network mappings and add to remapped property classes list
 			String networkPropertyClass = ClassMappingService.INSTANCE.convertRuntimeToNetworkMappings(propertyClass);
+			runtimePropertyClassesList.add(key);
 			remappedPropertyClassesList.add(networkPropertyClass);
 			// Return index in property classes list
 			return index;
@@ -88,8 +108,16 @@ public record NetworkedPropertyRegistry(
 		return new NetworkedPropertyRegistry(
 				remappedPropertyClassesList.toArray(new String[0]), 
 				stringTableList.toArray(new String[0]),
-				properties
+				properties,
+				runtimePropertyClassesList.toArray(new String[0]),
+				// PropertyRepresentative[] should have all of its values interned,
+				//   meaning the string table and runtime class table should already be fully interned
+				true
 			);
+	}
+
+	public final int getPropertyTableSize() {
+		return this.properties.length;
 	}
 	
 	public final int getClassTableSize() {
@@ -108,11 +136,19 @@ public record NetworkedPropertyRegistry(
 		return this.stringTable;
 	}
 	
-	public final NetworkedProperty[] getProperties() {
+	public final NetworkedProperty[] getPropertyTable() {
 		return this.properties;
+	}
+
+	public final NetworkedProperty[] getProperties() {
+		return this.getProperties();
 	}
 	
 	public final String[] computeRuntimePropertyClasses() {
+		if(this.runtimePropertyClasses != null) {
+			return this.runtimePropertyClasses;
+		}
+		
 		// Get the property class table we need to remap
 		final String[] remappedPropertyClasses = this.remappedPropertyClasses;
 		final int remappedPropertyClassesLength = remappedPropertyClasses.length;
@@ -128,8 +164,21 @@ public record NetworkedPropertyRegistry(
 			runtimePropertyClasses[i] = ClassMappingService.INSTANCE.convertNetworkToRuntimeMappings(networkClassName);
 		}
 		
+		// Memoize output
+		this.runtimePropertyClasses = runtimePropertyClasses;
+		
 		// Return output array
 		return runtimePropertyClasses;
+	}
+	
+	public final void internTables() {
+		if(this.isInterned) {
+			return;
+		}
+		// Intern the runtime class table and string table
+		this.isInterned = true;
+		PropertyRepresentative.internStrings(this.stringTable);
+		PropertyRepresentative.internStrings(this.computeRuntimePropertyClasses());
 	}
 	
 	public final PropertyRepresentative[] compileProperties() {
@@ -167,6 +216,26 @@ public record NetworkedPropertyRegistry(
 			
 			compiledProperties[i] = PropertyRepresentative.create(name, runtimePropertyClass, allowedValues);
 		}
+	}
+
+	public final String[] remappedPropertyClasses() {
+		return this.remappedPropertyClasses;
+	}
+	
+	public final String[] stringTable() {
+		return this.stringTable;
+	}
+	
+	public final NetworkedProperty[] properties() {
+		return this.properties;
+	}
+	
+	public final String[] runtimePropertyClasses() {
+		return this.runtimePropertyClasses;
+	}
+
+	public final boolean isInterned() {
+		return this.isInterned;
 	}
 	
 	public static void encode(FriendlyByteBuf buf, final NetworkedPropertyRegistry propertyRegistry) {
