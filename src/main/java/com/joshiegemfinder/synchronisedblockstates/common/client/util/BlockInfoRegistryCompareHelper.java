@@ -11,12 +11,13 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Block;
 
-public class BlockInfoRegistryComparable {
+public class BlockInfoRegistryCompareHelper {
 
-	private final List<ResourceKey<Block>> orderedKeys;
-	private final Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl> blockInfoMap;
+	public final int stateCount;
+	public final List<ResourceKey<Block>> orderedKeys;
+	public final Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl> blockInfoMap;
 
-	public BlockInfoRegistryComparable(BlockInfoRegistry registry) {
+	public BlockInfoRegistryCompareHelper(BlockInfoRegistry registry) {
 		final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
 		orderedKeys = new ArrayList<ResourceKey<Block>>(blocks.length);
 		blockInfoMap = new Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl>(blocks.length);
@@ -27,9 +28,11 @@ public class BlockInfoRegistryComparable {
 			orderedKeys.add(key);
 			blockInfoMap.put(key, block);
 		}
+		
+		this.stateCount = registry.getStateCount();
 	}
-
-	public BlockInfoRegistryComparable(List<ResourceKey<Block>> defaultKeyOrdering, BlockInfoRegistry registry) {
+	
+	public BlockInfoRegistryCompareHelper(List<ResourceKey<Block>> defaultKeyOrdering, BlockInfoRegistry registry) {
 		final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
 		final int registryBlockCount = blocks.length;
 		final int defaultKeyCount = defaultKeyOrdering.size();
@@ -67,6 +70,8 @@ public class BlockInfoRegistryComparable {
 		}
 		
 		orderedKeys.addAll(keysMissed);
-		
+
+		this.stateCount = registry.getStateCount();
 	}
+		
 }

@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 
 import com.joshiegemfinder.synchronisedblockstates.common.SynchronisedBlockstates;
 import com.joshiegemfinder.synchronisedblockstates.common.client.SynchronisedBlockstatesClient;
+import com.joshiegemfinder.synchronisedblockstates.common.client.util.BlockInfoRegistryCompareHelper;
 import com.joshiegemfinder.synchronisedblockstates.common.client.util.MappingUtil;
 import com.joshiegemfinder.synchronisedblockstates.common.client.util.RemappingIdMapper;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.ClientAckResponse;
@@ -29,7 +30,6 @@ import it.unimi.dsi.fastutil.ints.IntArrays;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArraySet;
 import net.minecraft.core.IdMapper;
 import net.minecraft.resources.ResourceKey;
@@ -66,27 +66,6 @@ public class RegistryRemapHandler {
 			}
 			
 			return new RegistryCompareResult(clientOnlyBlocks, new ArrayList<>(serverMap.values()), bothSidedBlocks);
-		}
-	}
-	
-	public static class BlockInfoRegistryCompareHelper {
-		public final int stateCount;
-		public final List<ResourceKey<Block>> orderedKeys;
-		public final Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl> blockInfoMap;
-
-		public BlockInfoRegistryCompareHelper(BlockInfoRegistry registry) {
-			final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
-			orderedKeys = new ArrayList<ResourceKey<Block>>(blocks.length);
-			blockInfoMap = new Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl>(blocks.length);
-			
-			for(int i = 0; i < blocks.length; ++i) {
-				final RegistryBlockInfoWrapper.Impl block = blocks[i];
-				final ResourceKey<Block> key = block.getKey();
-				orderedKeys.add(key);
-				blockInfoMap.put(key, block);
-			}
-			
-			this.stateCount = registry.getStateCount();
 		}
 	}
 	
