@@ -19,6 +19,7 @@ import com.joshiegemfinder.synchronisedblockstates.common.client.util.BlockInfoR
 import com.joshiegemfinder.synchronisedblockstates.common.client.util.MappingUtil;
 import com.joshiegemfinder.synchronisedblockstates.common.client.util.RemappingIdMapper;
 import com.joshiegemfinder.synchronisedblockstates.common.network.util.ClientAckResponse;
+import com.joshiegemfinder.synchronisedblockstates.common.network.util.NetworkedPropertyRegistry;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoRegistry;
 import com.joshiegemfinder.synchronisedblockstates.common.util.BlockInfoWrapper;
 import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresentative;
@@ -445,6 +446,11 @@ public class RegistryRemapHandler {
 	
 	public static RegistryRemapResult remapRegistry(RegistryCompareResult compareResult, BlockInfoRegistry clientRegistry, BlockInfoRegistryCompareHelper clientRegistryHelper, BlockInfoRegistry serverRegistry, BlockInfoRegistryCompareHelper serverRegistryHelper, final boolean outputMissingStates) {
 
+		// TODO TODO TODO Use PropertyBuckets
+
+		final NetworkedPropertyRegistry clientPropertyRegistry = clientRegistry.getNetworkedPropertyRegistry();
+		final NetworkedPropertyRegistry serverPropertyRegistry = serverRegistry.getNetworkedPropertyRegistry();
+		
 		final IdMapper<BlockState> originalMapper = MappingUtil.getOriginalBlockStateRegistry();
 		
 		final int AIR_ID = originalMapper.getId(Blocks.VOID_AIR.defaultBlockState());
