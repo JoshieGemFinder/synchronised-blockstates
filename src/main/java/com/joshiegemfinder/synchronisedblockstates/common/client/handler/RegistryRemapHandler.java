@@ -502,6 +502,10 @@ public class RegistryRemapHandler {
 		// Constants: PROPERTY_NOT_PRESENT = -1; PROPERTY_NOT_MATCHED = -2; PROPERTY_TOO_MANY_MATCHES = -3;
 		final int[] clientPropertyMappings = new int[clientPropertyTableSize];
 		Arrays.fill(clientPropertyMappings, PROPERTY_NOT_PRESENT);
+
+		// List that contains the indexes of all client property indexes that don't have a server-side match on the current block
+		final int[] clientOnlyPropertyIndexIndexes = new int[clientRegistryHelper.maxPropertyCount];
+		int clientOnlyPropertyIndexIndexesSize = 0;
 		
 		// List that contains the indexes of all server property indexes that don't have a client-side match on the current block
 		final int[] serverOnlyPropertyIndexIndexes = new int[serverRegistryHelper.maxPropertyCount];
@@ -547,7 +551,7 @@ public class RegistryRemapHandler {
 					
 					if(clientPropertyStatus >= 0) {
 						clientPropertyMappings[clientPropertyIndex] = PROPERTY_TOO_MANY_MATCHES;
-						// TODO fail remapping and send warning to player
+						// TODO fail remapping and display warning to player
 					} else if(clientPropertyStatus == PROPERTY_NOT_MATCHED) {
 						clientPropertyMappings[clientPropertyIndex] = serverPropertyIndex;
 						continue propertyMatchLoop;
@@ -559,6 +563,22 @@ public class RegistryRemapHandler {
 				serverOnlyPropertyIndexIndexes[serverOnlyPropertyIndexIndexesSize++] = serverPropertyIndexIndex;
 			}
 
+			// Get all info about properties
+			for(int clientPropertyIndexIndex = 0; clientPropertyIndexIndex < clientPropertyCount; ++clientPropertyIndexIndex) {
+				final int clientPropertyIndex = clientPropertyIndexes[clientPropertyIndexIndex];
+				
+				final int clientPropertyStatus = clientPropertyMappings[clientPropertyIndex];
+				if(clientPropertyStatus == PROPERTY_NOT_MATCHED) {
+					// Client-only property
+					clientOnlyPropertyIndexIndexes[clientOnlyPropertyIndexIndexesSize++] = clientPropertyIndexIndex;
+				} else if(clientPropertyStatus >= 0) {
+					// Dual-sided property
+					// TODO do property value comparisons
+				} else {
+					// This shouldn't be reached, something's gone wrong
+				}
+			}
+			
 			// Reset the values on the client properties
 			for(int clientPropertyIndex : clientPropertyIndexes) {
 				clientPropertyMappings[clientPropertyIndex] = PROPERTY_NOT_PRESENT;
