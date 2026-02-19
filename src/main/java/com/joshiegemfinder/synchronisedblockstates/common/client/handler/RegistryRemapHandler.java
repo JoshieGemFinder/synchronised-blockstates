@@ -30,9 +30,6 @@ import com.joshiegemfinder.synchronisedblockstates.common.util.PropertyRepresent
 import com.joshiegemfinder.synchronisedblockstates.common.util.RegistryBlockInfoWrapper;
 import com.joshiegemfinder.synchronisedblockstates.common.util.RegistryBlockInfoWrapper.Impl;
 
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntArrays;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArraySet;
@@ -494,16 +491,6 @@ public class RegistryRemapHandler {
 		final PropertyBuckets serverPropertyBuckets = new PropertyBuckets(serverRegistry);
 		final PropertyBucketMapping propertyMappings = new PropertyBucketMapping(clientPropertyBuckets, serverPropertyBuckets);
 		
-//		// Reusable map for instant access to which client properties are present and how many server properties are compatible with them
-//		// Value means:
-//		// -1 : this property isn't present on the current client block
-//		// 0 : this property is present on the current client block, but has no matching server property yet
-//		// 1 : this property is present on the current client block, and 1 property on the server block is compatible with it
-//		// 2 : this property is present on the current client block, and 2+ properties on the server block are compatible with it
-//		// Note: 2 means INVALID SERVER MAPPINGS, as there should only be a maximum of one property with the same class and name on a block
-//		final byte[] clientPropertiesPresent = new byte[clientPropertyTableSize];
-//		Arrays.fill(clientPropertiesPresent, (byte)-1);
-		
 		// TODO maybe use this as an alternative to clientPropertiesPresent
 		// Reusable map for instant access to which client properties are present and the server properties that are compatible with them
 		// Value means:
@@ -515,6 +502,10 @@ public class RegistryRemapHandler {
 		// Constants: PROPERTY_NOT_PRESENT = -1; PROPERTY_NOT_MATCHED = -2; PROPERTY_TOO_MANY_MATCHES = -3;
 		final int[] clientPropertyMappings = new int[clientPropertyTableSize];
 		Arrays.fill(clientPropertyMappings, PROPERTY_NOT_PRESENT);
+		
+		// List that contains the indexes of all server property indexes that don't have a client-side match on the current block
+		final int[] serverOnlyPropertyIndexIndexes = new int[serverRegistryHelper.maxPropertyCount];
+		int serverOnlyPropertyIndexIndexesSize = 0;
 		
 		// Remap all blocks that appear on both sides
 		for(final ClientServerBlockMatch dualSidedBlock : compareResult.bothSidedBlocks()) {
@@ -534,37 +525,43 @@ public class RegistryRemapHandler {
 				continue;
 			}
 
+			
 			final int[] clientPropertyIndexes = clientBlock.getPropertyIndexes();
 			final int[] serverPropertyIndexes = serverBlock.getPropertyIndexes();
 			
 			// Mark the client properties as "present"
 			for(int clientPropertyIndex : clientPropertyIndexes) {
-//				clientPropertiesPresent[clientPropertyIndex] = 0;
 				clientPropertyMappings[clientPropertyIndex] = PROPERTY_NOT_MATCHED;
 			}
 
-			// Mark which server properties are buckets
-			for(int serverPropertyIndex : serverPropertyIndexes) {
-				PropertyBucketPair bucketPair = propertyMappings.getServerPropertyBucketPair(serverPropertyIndex);
-				PropertyBucket clientBucket = bucketPair.clientBucket();
-				for(int clientPropertyIndex : clientBucket.fastPropertyIndexes()) {
-//					final byte clientPropertyStatus = clientPropertiesPresent[clientPropertyIndex];
-					
+			// Reset server-only property list
+			serverOnlyPropertyIndexIndexesSize = 0;
+			
+			// Match all client properties with server properties
+			propertyMatchLoop: for(int i = 0; i < serverPropertyCount; ++i) {
+				final int serverPropertyIndex = serverPropertyIndexes[i];
+				final PropertyBucketPair bucketPair = propertyMappings.getServerPropertyBucketPair(serverPropertyIndex);
+				final PropertyBucket clientBucket = bucketPair.clientBucket();
+				
+				for(final int clientPropertyIndex : clientBucket.fastPropertyIndexes()) {
 					final int clientPropertyStatus = clientPropertyMappings[clientPropertyIndex];
 					
 					if(clientPropertyStatus >= 0) {
 						clientPropertyMappings[clientPropertyIndex] = PROPERTY_TOO_MANY_MATCHES;
+						// TODO fail remapping and send warning to player
 					} else if(clientPropertyStatus == PROPERTY_NOT_MATCHED) {
 						clientPropertyMappings[clientPropertyIndex] = serverPropertyIndex;
-						// TODO Do property comparison
-						break;
+						continue propertyMatchLoop;
 					}
 				}
+				
+				// No match was found for this property
+				// (Otherwise this loop would have been continue-d)
+				serverOnlyPropertyIndexIndexes[serverOnlyPropertyIndexIndexesSize++] = i;
 			}
 
 			// Reset the values on the client properties
 			for(int clientPropertyIndex : clientPropertyIndexes) {
-//				clientPropertiesPresent[clientPropertyIndex] = -1;
 				clientPropertyMappings[clientPropertyIndex] = PROPERTY_NOT_PRESENT;
 			}
 		}

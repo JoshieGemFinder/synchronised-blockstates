@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.Block;
 public class BlockInfoRegistryCompareHelper {
 
 	public final int stateCount;
+	public final int maxPropertyCount;
 	public final List<ResourceKey<Block>> orderedKeys;
 	public final Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl> blockInfoMap;
 
@@ -21,14 +22,19 @@ public class BlockInfoRegistryCompareHelper {
 		final RegistryBlockInfoWrapper.Impl[] blocks = registry.getBlocks();
 		orderedKeys = new ArrayList<ResourceKey<Block>>(blocks.length);
 		blockInfoMap = new Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl>(blocks.length);
+		int maxPropertyCount = 0;
 		
 		for(int i = 0; i < blocks.length; ++i) {
 			final RegistryBlockInfoWrapper.Impl block = blocks[i];
 			final ResourceKey<Block> key = block.getKey();
 			orderedKeys.add(key);
 			blockInfoMap.put(key, block);
+			maxPropertyCount = Math.max(maxPropertyCount, block.getPropertyCount());
 		}
 		
+		blockInfoMap.trim();
+		
+		this.maxPropertyCount = maxPropertyCount;
 		this.stateCount = registry.getStateCount();
 	}
 	
@@ -39,6 +45,7 @@ public class BlockInfoRegistryCompareHelper {
 		
 		orderedKeys = new ArrayList<ResourceKey<Block>>(registryBlockCount);
 		blockInfoMap = new Reference2ObjectOpenHashMap<ResourceKey<Block>, RegistryBlockInfoWrapper.Impl>(registryBlockCount);
+		int maxPropertyCount = 0;
 
 		Reference2IntLinkedOpenHashMap<ResourceKey<Block>> keyIndexes = new Reference2IntLinkedOpenHashMap<ResourceKey<Block>>(defaultKeyCount);
 		for(int i = 0; i < defaultKeyCount; ++i) {
@@ -54,6 +61,7 @@ public class BlockInfoRegistryCompareHelper {
 			final RegistryBlockInfoWrapper.Impl block = blocks[i];
 			final ResourceKey<Block> key = block.getKey();
 			blockInfoMap.put(key, block);
+			maxPropertyCount = Math.max(maxPropertyCount, block.getPropertyCount());
 			
 			int hit = keyIndexes.removeInt(key);
 			if(hit != -1) {
@@ -63,6 +71,8 @@ public class BlockInfoRegistryCompareHelper {
 			}
 		}
 		
+		blockInfoMap.trim();
+		
 		for(int i = 0; i < defaultKeyCount; ++i) {
 			if(keysHit[i] != null) {
 				orderedKeys.add(keysHit[i]);
@@ -71,6 +81,7 @@ public class BlockInfoRegistryCompareHelper {
 		
 		orderedKeys.addAll(keysMissed);
 
+		this.maxPropertyCount = maxPropertyCount;
 		this.stateCount = registry.getStateCount();
 	}
 		
