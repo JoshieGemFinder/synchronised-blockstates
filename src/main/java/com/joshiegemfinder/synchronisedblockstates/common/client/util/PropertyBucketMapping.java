@@ -11,6 +11,8 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntArraySet;
+import it.unimi.dsi.fastutil.ints.IntImmutableList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.ints.IntSets;
@@ -36,12 +38,25 @@ public final class PropertyBucketMapping {
 	/**
 	 * Stores information about a "bucket" of properties on a single side of the mapping.
 	 */
-	public static record PropertyBucket(int classIndex, int nameIndex, ObjectList<PropertyWrapper> properties) {
+	public static record PropertyBucket(int classIndex, int nameIndex, int[] fastPropertyIndexes, ObjectList<PropertyWrapper> properties) {
+		public static int[] toIntArray(ObjectList<PropertyWrapper> properties) {
+			final int size = properties.size();
+			int[] list = new int[size];
+
+			for(int i = 0; i < size; ++i) {
+				list[i] = properties.get(i).propertyIndex();
+			}
+			
+			return list;
+		}
+		
 		public PropertyBucket(int classIndex, int nameIndex, ObjectList<PropertyWrapper> properties) {
-			this.classIndex = classIndex;
-			this.nameIndex = nameIndex;
-			// TODO See if List.copyOf(...) is better
-			this.properties = new ObjectImmutableList<>(properties);
+			this(
+					classIndex,
+					nameIndex,
+					toIntArray(properties),
+					new ObjectImmutableList<>(properties) // TODO See if List.copyOf(...) is better
+				);
 		}
 	}
 	
