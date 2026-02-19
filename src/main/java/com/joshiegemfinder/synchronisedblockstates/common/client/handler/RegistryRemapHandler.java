@@ -525,7 +525,6 @@ public class RegistryRemapHandler {
 				continue;
 			}
 
-			
 			final int[] clientPropertyIndexes = clientBlock.getPropertyIndexes();
 			final int[] serverPropertyIndexes = serverBlock.getPropertyIndexes();
 			
@@ -537,9 +536,9 @@ public class RegistryRemapHandler {
 			// Reset server-only property list
 			serverOnlyPropertyIndexIndexesSize = 0;
 			
-			// Match all client properties with server properties
-			propertyMatchLoop: for(int i = 0; i < serverPropertyCount; ++i) {
-				final int serverPropertyIndex = serverPropertyIndexes[i];
+			// Match all server properties to client properties or mark as server-only
+			propertyMatchLoop: for(int serverPropertyIndexIndex = 0; serverPropertyIndexIndex < serverPropertyCount; ++serverPropertyIndexIndex) {
+				final int serverPropertyIndex = serverPropertyIndexes[serverPropertyIndexIndex];
 				final PropertyBucketPair bucketPair = propertyMappings.getServerPropertyBucketPair(serverPropertyIndex);
 				final PropertyBucket clientBucket = bucketPair.clientBucket();
 				
@@ -557,7 +556,7 @@ public class RegistryRemapHandler {
 				
 				// No match was found for this property
 				// (Otherwise this loop would have been continue-d)
-				serverOnlyPropertyIndexIndexes[serverOnlyPropertyIndexIndexesSize++] = i;
+				serverOnlyPropertyIndexIndexes[serverOnlyPropertyIndexIndexesSize++] = serverPropertyIndexIndex;
 			}
 
 			// Reset the values on the client properties
