@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *     before 5 in the block info wrapper, A will always appear before B in the block info),
  *     and then use that to simplify comparisons.
  * Ultimately comes down to how much the sorting once can simplify the set operations.
+ * Sorting can speed up comparisons a lot, instead of O(m * n) time, it can be done in O(m + n) time
  */
 public final class BlockInfoRegistry {
 

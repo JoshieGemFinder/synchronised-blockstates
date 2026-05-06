@@ -33,6 +33,63 @@ public sealed abstract class RegistryBlockInfoWrapper extends BlockInfoWrapper p
 		return new ClientBlockInfoWrapper(this.getKey(), this.getProperties(), this.getStateGlobalIndexes());
 	}
 
+	public static void encodeFullArray(FriendlyByteBuf buf, final int[] stateArray) {
+		final int length = stateArray.length;
+		if(length < 254) {
+			buf.writeByte(length);
+			for(int is : stateArray) {
+				buf.writeVarInt(is);
+			}
+		} else {
+			buf.writeByte(254);
+			buf.writeVarIntArray(stateArray);
+		}
+	}
+
+	// Encodes the state array. Will attempt to pack it to minimise packet size without sacrificing speed
+	// Not relevant just yet...
+	// TODO come back once the property rework is done
+	public static void encodeStateArray(FriendlyByteBuf buf, final int[] stateArray) {
+		final int length = stateArray.length;
+		if(length == 0) {
+			buf.writeByte(0);
+			return;
+		}
+		final int initialValue = stateArray[0];
+		for(int i = 1; i < length; ++i) {
+			final int value = stateArray[i];
+			if(value != initialValue + i) {
+				encodeFullArray(buf, stateArray);
+				return;
+			}
+		}
+		buf.writeByte(255);
+		buf.writeVarInt(length); // Writing the length saves the most space
+		buf.writeVarInt(initialValue);
+	}
+	
+	public static int[] decodeStateArray(FriendlyByteBuf buf) {
+		final byte len = buf.readByte();
+		final int[] stateArray;
+		if(len == (byte)254) {
+			stateArray = buf.readVarIntArray();
+		} else if(len == (byte)255) {
+			final int length = buf.readVarInt();
+			final int initialValue = buf.readVarInt();
+			stateArray = new int[length];
+			for(int i = 0; i < length; ++i) {
+				stateArray[i] = initialValue + i;
+			}
+		} else {
+			final int length = ((int)len) & 0xFF; // length in range [0, 253]
+			stateArray = new int[length]; 
+			for(int i = 0; i < len; ++i) {
+				stateArray[i] = buf.readVarInt();
+			}
+		}
+		return stateArray;
+	}
+	
 	public static void encodeRegistry(FriendlyByteBuf buf, final RegistryBlockInfoWrapper blockInfo) {
 		// Write block key
 		buf.writeResourceKey(blockInfo.getKey());
@@ -42,6 +99,8 @@ public sealed abstract class RegistryBlockInfoWrapper extends BlockInfoWrapper p
 		
 		// Write states
 		buf.writeVarIntArray(blockInfo.getStateGlobalIndexes());
+		// TODO come back once the property rework is done
+//		encodeStateArray(buf, blockInfo.getStateGlobalIndexes());
 	}
 
 	public static final RegistryBlockInfoWrapper.Empty decodeRegistry(FriendlyByteBuf buf) {
@@ -53,6 +112,8 @@ public sealed abstract class RegistryBlockInfoWrapper extends BlockInfoWrapper p
 		
 		// Read global state indexes
 		final int[] stateGlobalIndexes = buf.readVarIntArray();
+		// TODO come back once the property rework is done
+//		final int[] stateGlobalIndexes = decodeStateArray(buf);
 		
 		return new RegistryBlockInfoWrapper.Empty(blockKey, propertyRepresentativeIndexes, stateGlobalIndexes);
 	}
@@ -66,6 +127,8 @@ public sealed abstract class RegistryBlockInfoWrapper extends BlockInfoWrapper p
 		
 		// Read global state indexes
 		final int[] stateGlobalIndexes = buf.readVarIntArray();
+		// TODO come back once the property rework is done
+//		final int[] stateGlobalIndexes = decodeStateArray(buf);
 		
 		return new RegistryBlockInfoWrapper.Impl(blockKey, propertyRepresentativeIndexes, stateGlobalIndexes, propertyRegistry);
 	}
